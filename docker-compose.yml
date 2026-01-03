@@ -31,6 +31,12 @@ services:
       - "-storageDataPath=/victoria-metrics-data"
       - "-retentionPeriod=1y"
 
+  redis:
+    image: redis:alpine
+    container_name: openanomaly-redis
+    ports:
+      - "6379:6379"
+
 volumes:
   mongo-data:
   minio-data:

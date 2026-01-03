@@ -25,6 +25,9 @@
             echo "OpenAnomaly Dev Shell"
             echo "Python: $(python --version)"
             echo "UV: $(uv --version)"
+            
+            # Ensure venv is created and dependencies are installed
+            uv sync
           '';
         };
       });

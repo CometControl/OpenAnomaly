@@ -49,6 +49,35 @@ OpenAnomaly operates in a continuous loop, similar to VMAnomaly:
 │                                                                  │
 └──────────────────────────────────────────────────────────────────┘
 ```
+┌──────────────────────────────────────────────────────────────────┐
+│                        THE INFERENCE LOOP                        │
+│  (Existing loop components...)                                   │
+└──────────────────────────────────────────────────────────────────┘
+
+┌──────────────────────────────────────────────────────────────────┐
+│                        THE TRAINING LOOP                         │
+│                                                                  │
+│  ┌─────────────────┐                                             │
+│  │   1. SCHEDULER  │  (Celery Beat triggers job)                 │
+│  └────────┬────────┘                                             │
+│           │                                                       │
+│           ▼                                                       │
+│  ┌─────────────────┐                                             │
+│  │  2. FETCH DATA  │  (Long Range Query e.g. 30d)                │
+│  └────────┬────────┘                                             │
+│           │                                                       │
+│           ▼                                                       │
+│  ┌─────────────────┐                                             │
+│  │ 3. TRAIN/FIT    │  (Train model/Fit parameters)               │
+│  └────────┬────────┘                                             │
+│           │                                                       │
+│           ▼                                                       │
+│  ┌─────────────────┐                                             │
+│  │ 4. UPDATE CONFIG│  (Save new model ID/Artifact)               │
+│  └─────────────────┘                                             │
+│                                                                  │
+└──────────────────────────────────────────────────────────────────┘
+
 
 ---
 
@@ -64,8 +93,8 @@ OpenAnomaly operates in a continuous loop, similar to VMAnomaly:
 | **`Scheduler`** | Trigger inference jobs on a schedule | `CeleryBeatAdapter` |
 
 ### Removed Ports (vs. Previous Design)
-*   ~~`ArtifactStore`~~: No model weights to store.
-*   ~~`TrainerWorker`~~: No training happens.
+*   ~~`ArtifactStore`~~: No model weights to store (for pre-trained TSFMs). For trainable models, weights are managed by the Model Engine (Remote or Local).
+
 
 ---
 
@@ -95,16 +124,27 @@ For models running on external infrastructure (e.g., dedicated GPU server, cloud
 ```json
 POST /predict
 {
-  "context": [1.2, 3.4, 5.6, ...],    // Historical values
-  "prediction_length": 12,            // Horizon
-  "quantiles": [0.1, 0.5, 0.9]        // Optional
+  "context": [1.2, 3.4, ...],
+  "prediction_length": 12,
+  "quantiles": [0.1, 0.5, 0.9]
 }
 Response:
 {
-  "forecast": [7.8, 9.0, ...],
-  "quantiles": {...}                  // If requested
+  "forecast": [7.8, ...],
+  "quantiles": {...}
+}
+
+POST /train (Optional)
+{
+  "data": [{"ds": "2024-01-01T00:00:00Z", "unique_id": "ts1", "y": 1.2}, ...],
+  "parameters": {"epochs": 10}
+}
+Response:
+{
+  "model_id": "model_v2_123"
 }
 ```
+
 
 *Configuration*: `OA_MODEL_TYPE="remote"`, `OA_MODEL_ENDPOINT="http://gpu-server:8000/predict"`
 
@@ -153,6 +193,16 @@ pipelines:
         temperature: 1.0                # Sampling temperature
         top_k: 50                       # Top-k sampling
         top_p: 1.0                      # Top-p (nucleus) sampling
+
+    # --- Training Configuration (Optional) ---
+    training:
+      enabled: true
+      schedule: "0 0 * * *"             # Daily at midnight
+      window: "30d"                     # Training data history
+      parameters:                       # Training-specific parameters
+        epochs: 10
+        batch_size: 32
+
 
     # --- Anomaly Detection ---
     anomaly:

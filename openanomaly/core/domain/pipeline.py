@@ -41,6 +41,15 @@ class OutputConfig(BaseModel):
     metric_prefix: str = "openanomaly_"
 
 
+class TrainingConfig(BaseModel):
+    """Configuration for model training."""
+    
+    enabled: bool = True
+    schedule: str = "0 0 * * *"  # Daily at midnight
+    window: str = "30d"  # Lookback window for training data
+    parameters: dict = Field(default_factory=dict)  # Training-specific parameters
+
+
 class Pipeline(BaseModel):
     """
     Complete pipeline configuration.
@@ -74,6 +83,9 @@ class Pipeline(BaseModel):
     
     # --- Model Configuration ---
     model: ModelConfig = Field(default_factory=lambda: ModelConfig(type="local"))
+    
+    # --- Training Configuration ---
+    training: TrainingConfig | None = Field(default=None)
     
     # --- Anomaly Detection ---
     anomaly: AnomalyConfig = Field(default_factory=AnomalyConfig)

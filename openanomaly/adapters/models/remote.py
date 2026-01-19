@@ -78,6 +78,39 @@ class RemoteModelAdapter(ModelEngine):
             
         return result_df
     
+    async def train(
+        self,
+        df: pd.DataFrame,
+        parameters: dict[str, Any]
+    ) -> str:
+        """Call the remote training endpoint."""
+        import json
+        client = await self._get_client()
+        
+        # Serialize DataFrame safely
+        data_json = df.to_json(orient="records", date_format="iso")
+        data_list = json.loads(data_json)
+        
+        payload = {
+            "data": data_list,
+            "parameters": parameters
+        }
+        
+        response = await client.post(
+            f"{self.endpoint}/train",
+            json=payload,
+        )
+        response.raise_for_status()
+        
+        # Expecting {"model_id": "..."} or {"artifact_uri": "..."}
+        data = response.json()
+        model_id = data.get("model_id") or data.get("artifact_uri")
+        
+        if not model_id:
+            raise ValueError("Remote training response missing 'model_id' or 'artifact_uri'")
+            
+        return str(model_id)
+
     async def health_check(self) -> bool:
         """Check if the remote server is healthy."""
         try:

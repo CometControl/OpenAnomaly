@@ -52,8 +52,14 @@ def run_inference_task(pipeline_name: str):
         # 2. Instantiate Components based on Pipeline Config
         logger.info(f"Initializing model '{pipeline.model.id}' for pipeline '{pipeline_name}'")
         
-        # Factory logic could go here. For now, we assume ChronosAdapter defaults.
-        model = ChronosAdapter(model_id=pipeline.model.id)
+        if pipeline.model.type == "remote":
+            from openanomaly.adapters.models.remote import RemoteModelAdapter
+            # Ensure endpoint is provided
+            if not pipeline.model.endpoint:
+                raise ValueError("Endpoint required for remote model")
+            model = RemoteModelAdapter(endpoint=pipeline.model.endpoint, **pipeline.model.parameters)
+        else:
+            model = ChronosAdapter(model_id=pipeline.model.id)
         
         # TSDB is currently environment-based (shared infra)
         tsdb = PrometheusAdapter(read_url=VM_URL, write_url=VM_WRITE_URL)
@@ -68,5 +74,53 @@ def run_inference_task(pipeline_name: str):
     except Exception as e:
         logger.error(f"Task failed: {e}")
         raise e
+
+@celery_app.task(name="openanomaly.tasks.train_model")
+def run_training_task(pipeline_name: str):
+    """
+    Background task to train model for a specific pipeline.
+    """
+    import asyncio
+    from openanomaly.core.services.training_loop import TrainingLoop
+    
+    logger.info(f"Starting training task for pipeline: {pipeline_name}")
+    
+    async def _execute():
+        # 1. Load Pipeline Configuration
+        config_store = YamlConfigStore(config_path="pipelines.yaml")
+        pipeline = await config_store.get_pipeline(pipeline_name)
+        if not pipeline:
+            logger.error(f"Pipeline '{pipeline_name}' not found.")
+            return
+            
+        # 2. Instantiate Components
+        if pipeline.model.type == "remote":
+            from openanomaly.adapters.models.remote import RemoteModelAdapter
+            if not pipeline.model.endpoint:
+                 raise ValueError("Endpoint required for remote model")
+            model = RemoteModelAdapter(endpoint=pipeline.model.endpoint, **pipeline.model.parameters)
+        else:
+            # Local models (Chronos) generally don't support training via this task yet
+            # But we instantiate anyway to allow the adapter to handle it (e.g. log skip)
+            model = ChronosAdapter(model_id=pipeline.model.id)
+            
+        tsdb = PrometheusAdapter(read_url=VM_URL, write_url=VM_WRITE_URL)
+        
+        # 3. Service Execution
+        service = TrainingLoop(tsdb, model)
+        new_id = await service.run_training(pipeline)
+        
+        if new_id:
+            logger.info(f"Pipeline '{pipeline_name}' trained. New Model ID: {new_id}")
+            # TODO: Update pipeline config with new model ID if needed
+            
+    try:
+        asyncio.run(_execute())
+        return f"Training Success: {pipeline_name}"
+    except Exception as e:
+        logger.error(f"Training failed: {e}")
+        raise e
+
+
         
 

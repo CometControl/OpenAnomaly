@@ -52,6 +52,24 @@ class ModelEngine(BaseModel, ABC):
         ...
     
     @abstractmethod
+    async def train(
+        self,
+        df: pd.DataFrame,
+        parameters: dict[str, Any]
+    ) -> str:
+        """
+        Train the model.
+        
+        Args:
+            df: Input DataFrame ['ds', 'y', 'unique_id']
+            parameters: Training hyperparameters
+            
+        Returns:
+            str: Model ID or Artifact URI of the trained model
+        """
+        ...
+    
+    @abstractmethod
     async def health_check(self) -> bool:
         """Check if model engine is healthy."""
         ...

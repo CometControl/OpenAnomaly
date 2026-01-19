@@ -35,7 +35,7 @@ Write Results (Remote Write)
 
 ## Features
 
-*   **Any TSFM**: Use any Time Series Foundation Model available on HuggingFace.
+*   **Leading TSFMs**: Use the latest Time Series Foundation Models from HuggingFace (Chronos, TimesFM, TOTO, Moirai).
 *   **Local or Remote Models**: Run models locally or call external inference endpoints.
 *   **Flexible Modes**: Forecast-only, Anomaly Detection, or both.
 *   **Rich Configuration**: Step size, covariates, confidence techniques, per-pipeline settings.
@@ -110,4 +110,4 @@ nix develop
 ---
 
 ## License
-[MIT](LICENSE)
+[Apache 2.0](LICENSE)

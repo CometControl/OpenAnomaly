@@ -43,6 +43,13 @@
     - [x] Integrate CSV loader into `test_e2e.py` <!-- id: 25 -->
     - [x] Create sample BOOM-like dataset (`data/boom_sample.csv`) <!-- id: 26 -->
 
+- [x] **Training Support** (User Request) <!-- id: 40 -->
+    - [x] Update `Pipeline` domain model with `TrainingConfig` (`schedule`, `window`, `parameters`) <!-- id: 41 -->
+    - [x] Update `ModelEngine` interface with `train()` abstract method <!-- id: 42 -->
+    - [x] Register `openanomaly.tasks.train_model` in `main.py` <!-- id: 43 -->
+    - [x] Implement `run_training_task` logic (fetch data -> train -> log) <!-- id: 44 -->
+    - [x] Create `RemoteTrainableAdapter` (Implemented in `RemoteModelAdapter`) <!-- id: 45 -->
+
 - [ ] **API** <!-- id: 27 -->
     - [ ] FastAPI service with JSON Schema validation <!-- id: 28 -->
     - [ ] CRUD for pipelines (requires `MongoAdapter`) <!-- id: 29 -->

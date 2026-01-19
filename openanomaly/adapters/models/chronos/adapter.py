@@ -151,5 +151,18 @@ class ChronosAdapter(ModelEngine):
             
         return forecast_df
         
+    async def train(
+        self,
+        df: pd.DataFrame,
+        parameters: dict[str, Any]
+    ) -> str:
+        """
+        Train the model.
+        Chronos is a pre-trained foundation model. 
+        Returns the current model_id as it doesn't require training.
+        """
+        logger.info(f"Skipping training for pre-trained model '{self.model_id}'")
+        return self.model_id
+        
     async def health_check(self) -> bool:
         return self._pipeline is not None

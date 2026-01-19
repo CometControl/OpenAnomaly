@@ -7,12 +7,15 @@ from abc import ABC, abstractmethod
 from datetime import datetime
 
 import pandas as pd
+from pydantic import BaseModel, ConfigDict
 
 
-class TSDBClient(ABC):
+class TSDBClient(BaseModel, ABC):
     """
     Abstract interface for Time Series Database operations.
+    Also serves as a Pydantic Model for configuration validation.
     """
+    model_config = ConfigDict(arbitrary_types_allowed=True)
     
     @abstractmethod
     async def query_range(
@@ -33,9 +36,6 @@ class TSDBClient(ABC):
             
         Returns:
             DataFrame with columns: ['ds', 'y', 'unique_id'] (Nixtla/Chronos compatible)
-            - ds: timestamp
-            - y: value
-            - unique_id: metric identifier
         """
         ...
     

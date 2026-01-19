@@ -2,14 +2,13 @@
 Prometheus Adapter - TSDB client for Prometheus-compatible databases.
 
 Supports VictoriaMetrics, Thanos, Mimir, Cortex, and native Prometheus.
-Implements both Query API (read) and Remote Write (write).
 """
 
 from datetime import datetime
-from urllib.parse import urlencode
 
 import httpx
 import pandas as pd
+from pydantic import PrivateAttr
 
 from openanomaly.core.ports.tsdb_client import TSDBClient
 
@@ -17,22 +16,21 @@ from openanomaly.core.ports.tsdb_client import TSDBClient
 class PrometheusAdapter(TSDBClient):
     """
     TSDB adapter for Prometheus-compatible databases.
+    Configured via Pydantic model fields.
     """
+    read_url: str
+    write_url: str | None = None
+    timeout: float = 30.0
+    headers: dict[str, str] = {}
     
-    def __init__(
-        self,
-        read_url: str,
-        write_url: str | None = None,
-        timeout: float = 30.0,
-        headers: dict[str, str] | None = None,
-    ):
-        self.read_url = read_url.rstrip("/")
-        self.write_url = write_url
-        self.timeout = timeout
-        self.headers = headers or {}
-        self._client: httpx.AsyncClient | None = None
+    _client: httpx.AsyncClient | None = PrivateAttr(default=None)
+
+    def model_post_init(self, __context):
+        """Normalize URL after initialization."""
+        self.read_url = self.read_url.rstrip("/")
     
     async def _get_client(self) -> httpx.AsyncClient:
+        """Get or create the HTTP client."""
         if self._client is None:
             self._client = httpx.AsyncClient(
                 timeout=self.timeout,
@@ -47,9 +45,7 @@ class PrometheusAdapter(TSDBClient):
         end: datetime,
         step: str,
     ) -> pd.DataFrame:
-        """
-        Execute a range query and return a DataFrame.
-        """
+        """Execute a range query and return a DataFrame."""
         client = await self._get_client()
         
         params = {
@@ -74,18 +70,15 @@ class PrometheusAdapter(TSDBClient):
         for result in data.get("data", {}).get("result", []):
             metric = result.get("metric", {})
             name = metric.pop("__name__", "metric")
-            # Construct unique_id from metric labels for identification
-            # Format: name{label="value",...}
+            
             labels_str = ",".join(f'{k}="{v}"' for k, v in sorted(metric.items()))
             unique_id = f"{name}{{{labels_str}}}" if labels_str else name
             
-            # Values are [timestamp, value]
             values = result.get("values", [])
             if not values:
                 continue
                 
             df_series = pd.DataFrame(values, columns=["timestamp", "value"])
-            # Prometheus timestamp is in seconds
             df_series["ds"] = pd.to_datetime(df_series["timestamp"].astype(float), unit="s")
             df_series["y"] = pd.to_numeric(df_series["value"], errors="coerce")
             df_series["unique_id"] = unique_id
@@ -101,25 +94,19 @@ class PrometheusAdapter(TSDBClient):
         self,
         df: pd.DataFrame,
     ) -> None:
-        """
-        Write time series data using Remote Write (Line Protocol mostly).
-        df columns: ['unique_id', 'ds', 'y']
-        """
+        """Write time series data using Remote Write."""
         if not self.write_url:
             raise RuntimeError("Write URL not configured")
         
         client = await self._get_client()
         
-        # Check required columns
         required_cols = {"unique_id", "ds", "y"}
         if not required_cols.issubset(df.columns):
             raise ValueError(f"DataFrame must contain columns: {required_cols}")
         
         lines = []
-        # Vectorize usually better, but for simplicity in robust writing:
         for _, row in df.iterrows():
             metric = row["unique_id"]
-            # Convert timestamp to int64 milliseconds
             ts_ms = int(row["ds"].timestamp() * 1000)
             val = row["y"]
             lines.append(f"{metric} {val} {ts_ms}")

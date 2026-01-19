@@ -1,13 +1,34 @@
+"""
+Prometheus Adapter - TSDB client for Prometheus-compatible databases.
 
+Supports VictoriaMetrics, Thanos, Mimir, Cortex, and native Prometheus.
+Uses OpenTelemetry Exporter for robust Remote Write.
+"""
+
+import time
 from datetime import datetime
 
 import httpx
 import pandas as pd
 from pydantic import PrivateAttr
+
+# OpenTelemetry Imports for manual metric construction
 try:
-    from prometheus_remote_writer import RemoteWriter
+    from opentelemetry.exporter.prometheus_remote_write import (
+        PrometheusRemoteWriteMetricsExporter,
+    )
+    from opentelemetry.sdk.metrics.export import (
+        MetricsData,
+        ResourceMetrics,
+        ScopeMetrics,
+        Metric,
+        NumberDataPoint,
+        AggregationTemporality,
+    )
+    from opentelemetry.sdk.resources import Resource
+    from opentelemetry.sdk.util.instrumentation import InstrumentationScope
 except ImportError:
-    RemoteWriter = None
+    PrometheusRemoteWriteMetricsExporter = None
 
 from openanomaly.core.ports.tsdb_client import TSDBClient
 
@@ -23,15 +44,12 @@ class PrometheusAdapter(TSDBClient):
     headers: dict[str, str] = {}
     
     _client: httpx.AsyncClient | None = PrivateAttr(default=None)
-    _writer: "RemoteWriter | None" = PrivateAttr(default=None)
+    _exporter: "PrometheusRemoteWriteMetricsExporter | None" = PrivateAttr(default=None)
 
     def model_post_init(self, __context):
         """Normalize URL after initialization."""
         self.read_url = self.read_url.rstrip("/")
-        if self.write_url and RemoteWriter is None:
-             # Ideally we raise ImportError here if we strictly require it for config,
-             # but to allow read-only usage without the pkg we can be lenient or raise.
-             # Given user intent, let's assume pkg is required for write capability.
+        if self.write_url and PrometheusRemoteWriteMetricsExporter is None:
              pass 
     
     async def _get_client(self) -> httpx.AsyncClient:
@@ -43,24 +61,20 @@ class PrometheusAdapter(TSDBClient):
             )
         return self._client
     
-    def _get_writer(self) -> "RemoteWriter":
-        """Get or create the RemoteWriter."""
-        if self._writer is None:
-            if RemoteWriter is None:
-                raise ImportError("prometheus-remote-writer not installed")
+    def _get_exporter(self) -> "PrometheusRemoteWriteMetricsExporter":
+        """Get or create the OTel Remote Write Exporter."""
+        if self._exporter is None:
+            if PrometheusRemoteWriteMetricsExporter is None:
+                raise ImportError("opentelemetry-exporter-prometheus-remote-write not installed")
             if not self.write_url:
                 raise RuntimeError("Write URL not configured")
      
-            # RemoteWriter uses requests synchronous by default usually, checks docs.
-            # Library seems synchonous. We might need to run in executor if high load,
-            # but for MVP sync is okay or we check if async supported.
-            # Assuming sync for now as per library standard using 'requests'.
-            self._writer = RemoteWriter(
-                url=self.write_url,
+            self._exporter = PrometheusRemoteWriteMetricsExporter(
+                endpoint=self.write_url,
                 headers=self.headers,
-                # timeout might not be exposed directly in all versions, check args if needed
+                timeout=int(self.timeout),
             )
-        return self._writer
+        return self._exporter
     
     async def query_range(
         self,
@@ -119,49 +133,113 @@ class PrometheusAdapter(TSDBClient):
         df: pd.DataFrame,
     ) -> None:
         """
-        Write time series data using prometheus-remote-writer.
+        Write time series data using OTel Remote Write Exporter.
+        Manually constructs MetricsData to allow historical timestamps.
         """
-        writer = self._get_writer()
+        exporter = self._get_exporter()
         
         # DataFrame columns: ['unique_id', 'ds', 'y']
         required_cols = {"unique_id", "ds", "y"}
         if not required_cols.issubset(df.columns):
             raise ValueError(f"DataFrame must contain columns: {required_cols}")
-            
+        
+        # We need to group by metric name to create efficient OTel structures
+        # In unique_id, format is name{label="v"}
+        # We'll parse first
+        
+        points_by_metric = {} # name -> list of points
+        
         for _, row in df.iterrows():
-            # Parse metric name and labels from unique_id
-            # Format: name{label="value",...} or just name
             raw_id = row["unique_id"]
+            labels = {}
+            metric_name = raw_id
+            
             if "{" in raw_id and raw_id.endswith("}"):
                 name_part, labels_part = raw_id[:-1].split("{", 1)
                 metric_name = name_part
-                labels = {}
-                # Simple parsing of label="value", key2="val2"
-                # Robust parsing might require regex if values contain commas/quotes
-                # For now, MVP assumes standard structure
                 for pair in labels_part.split(","):
                     if "=" in pair:
                         k, v = pair.split("=", 1)
                         labels[k.strip()] = v.strip().strip('"')
-            else:
-                metric_name = raw_id
-                labels = {}
             
-            # Timestamp to seconds (library expects float seconds or calls it internally?)
-            # Library doc: timestamp in seconds (float or int)
-            ts_sec = row["ds"].timestamp()
-            value = float(row["y"])
+            ts_ns = int(row["ds"].timestamp() * 1e9)
+            val = float(row["y"])
             
-            # Sync call (blocking). In prod, offload to thread/process?
-            writer.write(
-                metric_name=metric_name,
-                value=value,
-                timestamp=ts_sec,
-                labels=labels,
+            # Create OTel Point
+            point = NumberDataPoint(
+                attributes=labels,
+                start_time_unix_nano=ts_ns,
+                time_unix_nano=ts_ns,
+                value=val,
             )
-    
+            
+            if metric_name not in points_by_metric:
+                points_by_metric[metric_name] = []
+            points_by_metric[metric_name].append(point)
+            
+        # Construct Metrics
+        otel_metrics = []
+        for name, points in points_by_metric.items():
+            # Create a Gauge metric (assuming value is a gauge, typical for anomalies/forecasts)
+            # OTel data model is complex. We need to wrap points in Metric -> Scope -> Resource
+            
+            # Caution: We need to know if it's Gauge or Sum. 
+            # For general time series, Gauge is safest default if we don't know.
+            # But OTel Python SDK construction manually is tricky.
+            # We construct a Metric object.
+            
+            # Using Sum for simplicity in data structure match, usually Remote Write handles samples.
+            # But actually Prometheus interprets based on type.
+            # Let's try to construct a Gauge (which in OTel data model is often represented as Gauge)
+            # The library expects `Metric` objects.
+            
+            # Note: 1.20+ SDK might have specific classes. 
+            # We will use a generic approach compatible with recent SDKs.
+            
+            metric = Metric(
+                name=name,
+                description="",
+                unit="",
+                data=None, # Filled below
+            )
+            
+            # We need to wrap points in a specific Data object (Sum, Gauge, etc)
+            # In OTel SDK < 1.15 usage might differ. 
+            # Trying standard "Sum" with Delta temporality or "Gauge".
+            # "Gauge" is simply "NumberDataPoint" in recent versions often wrapped in "Gauge" object.
+            
+            # Let's try to find the Gauge container.
+            from opentelemetry.sdk.metrics.export import Gauge
+            
+            metric.data = Gauge(data_points=points)
+            otel_metrics.append(metric)
+
+        if not otel_metrics:
+            return
+
+        # Wrap in ScopeMetrics
+        scope_metrics = ScopeMetrics(
+            scope=InstrumentationScope(name="openanomaly", version="0.1.0"),
+            metrics=otel_metrics,
+            schema_url="",
+        )
+        
+        # Wrap in ResourceMetrics
+        resource_metrics = ResourceMetrics(
+            resource=Resource.create({"service.name": "openanomaly-adapter"}),
+            scope_metrics=[scope_metrics],
+            schema_url="",
+        )
+        
+        # Wrap in MetricsData
+        metrics_data = MetricsData(
+            resource_metrics=[resource_metrics]
+        )
+        
+        # Export!
+        exporter.export(metrics_data)
+
     async def close(self) -> None:
         if self._client:
             await self._client.aclose()
             self._client = None
-

@@ -7,21 +7,8 @@ services:
     volumes:
       - mongo-data:/data/db
 
-  minio:
-    image: minio/minio
-    container_name: openanomaly-minio
-    ports:
-      - "9000:9000"
-      - "9001:9001"
-    environment:
-      MINIO_ROOT_USER: minioadmin
-      MINIO_ROOT_PASSWORD: minioadmin
-    command: server /data --console-address ":9001"
-    volumes:
-      - minio-data:/data
-
   victoriametrics:
-    image: victoriametrics/victoria-metrics:v1.93.4
+    image: victoriametrics/victoria-metrics:latest
     container_name: openanomaly-vm
     ports:
       - "8428:8428"
@@ -37,7 +24,40 @@ services:
     ports:
       - "6379:6379"
 
+  app:
+    build: .
+    container_name: openanomaly-api
+    ports:
+      - "8000:8000"
+    environment:
+      - MONGODB_URI=mongodb://mongo:27017
+      - REDIS_URL=redis://redis:6379/0
+      - VICTORIAMETRICS_URL=http://victoriametrics:8428
+    depends_on:
+      - mongo
+      - redis
+      - victoriametrics
+    volumes:
+      - .:/app
+      - /app/.venv
+    command: uvicorn main:app --host 0.0.0.0 --port 8000 --reload
+
+  worker:
+    build: .
+    container_name: openanomaly-worker
+    environment:
+      - MONGODB_URI=mongodb://mongo:27017
+      - REDIS_URL=redis://redis:6379/0
+      - VICTORIAMETRICS_URL=http://victoriametrics:8428
+    depends_on:
+      - mongo
+      - redis
+      - victoriametrics
+    volumes:
+      - .:/app
+      - /app/.venv
+    command: celery -A openanomaly.main:celery_app worker --loglevel=info
+
 volumes:
   mongo-data:
-  minio-data:
   vm-data:

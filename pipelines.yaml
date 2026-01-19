@@ -1,0 +1,12 @@
+
+pipelines:
+  - name: boom_pipeline
+    query: ds_0_T{source="boom"}
+    step: 1m
+    context_window: 1h
+    prediction_horizon: 15m
+    model:
+      type: local
+      id: autogluon/chronos-2-small
+    output:
+       metric_prefix: openanomaly_

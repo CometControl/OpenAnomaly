@@ -1,0 +1,72 @@
+
+import os
+import asyncio
+import logging
+from fastapi import FastAPI
+from celery import Celery
+
+from openanomaly.adapters.tsdb.prometheus import PrometheusAdapter
+from openanomaly.adapters.models.chronos.adapter import ChronosAdapter
+from openanomaly.core.services.inference_loop import InferenceLoop
+from openanomaly.adapters.config.yaml_store import YamlConfigStore
+
+# Logging
+logging.basicConfig(level=logging.INFO)
+logger = logging.getLogger(__name__)
+
+# Configuration
+REDIS_URL = os.getenv("REDIS_URL", "redis://localhost:6379/0")
+VM_URL = os.getenv("VICTORIAMETRICS_URL", "http://localhost:8428")
+# VM write path for prometheus remote write is usually /api/v1/write
+VM_WRITE_URL = os.getenv("VICTORIAMETRICS_WRITE_URL", f"{VM_URL}/api/v1/write")
+
+# Celery Application
+celery_app = Celery("openanomaly", broker=REDIS_URL, backend=REDIS_URL)
+
+# FastAPI Application
+app = FastAPI(title="OpenAnomaly")
+
+@app.get("/health")
+def health_check():
+    return {"status": "ok", "version": "0.1.0"}
+
+# Celery Tasks
+@celery_app.task(name="openanomaly.tasks.run_inference")
+def run_inference_task(pipeline_name: str):
+    """
+    Background task to run inference for a specific pipeline.
+    """
+    logger.info(f"Starting inference task for pipeline: {pipeline_name}")
+    
+    async def _execute():
+        # 1. Load Pipeline Configuration
+        # Assuming pipelines.yaml is in the current working directory
+        config_store = YamlConfigStore(config_path="pipelines.yaml")
+        
+        # Load pipeline to get model config
+        pipeline = await config_store.get_pipeline(pipeline_name)
+        if not pipeline:
+            logger.error(f"Pipeline '{pipeline_name}' not found in configuration.")
+            return
+
+        # 2. Instantiate Components based on Pipeline Config
+        logger.info(f"Initializing model '{pipeline.model.id}' for pipeline '{pipeline_name}'")
+        
+        # Factory logic could go here. For now, we assume ChronosAdapter defaults.
+        model = ChronosAdapter(model_id=pipeline.model.id)
+        
+        # TSDB is currently environment-based (shared infra)
+        tsdb = PrometheusAdapter(read_url=VM_URL, write_url=VM_WRITE_URL)
+        
+        # 3. Service Execution
+        service = InferenceLoop(tsdb, model)
+        await service.run_pipeline(pipeline)
+
+    try:
+        asyncio.run(_execute())
+        return f"Success: {pipeline_name}"
+    except Exception as e:
+        logger.error(f"Task failed: {e}")
+        raise e
+        
+

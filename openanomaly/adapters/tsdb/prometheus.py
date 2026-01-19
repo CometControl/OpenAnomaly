@@ -88,8 +88,8 @@ class PrometheusAdapter(TSDBClient):
         
         params = {
             "query": query,
-            "start": start.isoformat(),
-            "end": end.isoformat(),
+            "start": str(start.timestamp()),
+            "end": str(end.timestamp()),
             "step": step,
         }
         
@@ -196,22 +196,17 @@ class PrometheusAdapter(TSDBClient):
             # Note: 1.20+ SDK might have specific classes. 
             # We will use a generic approach compatible with recent SDKs.
             
+            # Let's try to find the Gauge container.
+            from opentelemetry.sdk.metrics.export import Gauge
+            
+            gauge_data = Gauge(data_points=points)
+            
             metric = Metric(
                 name=name,
                 description="",
                 unit="",
-                data=None, # Filled below
+                data=gauge_data,
             )
-            
-            # We need to wrap points in a specific Data object (Sum, Gauge, etc)
-            # In OTel SDK < 1.15 usage might differ. 
-            # Trying standard "Sum" with Delta temporality or "Gauge".
-            # "Gauge" is simply "NumberDataPoint" in recent versions often wrapped in "Gauge" object.
-            
-            # Let's try to find the Gauge container.
-            from opentelemetry.sdk.metrics.export import Gauge
-            
-            metric.data = Gauge(data_points=points)
             otel_metrics.append(metric)
 
         if not otel_metrics:
@@ -225,8 +220,9 @@ class PrometheusAdapter(TSDBClient):
         )
         
         # Wrap in ResourceMetrics
+        # Use empty resource to avoid injecting SDK/Language/OS tags
         resource_metrics = ResourceMetrics(
-            resource=Resource.create({"service.name": "openanomaly-adapter"}),
+            resource=Resource.get_empty(),
             scope_metrics=[scope_metrics],
             schema_url="",
         )

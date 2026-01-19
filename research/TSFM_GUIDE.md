@@ -17,7 +17,24 @@ These models enable **Zero-Shot Inference**:
 
 ---
 
-## 2. Key Models & Papers
+## 2. Implementation Best Practices (Jupyter Research)
+
+### 🔵 Chronos-2 (Amazon)
+*   **Pipeline Wrapper**: Use **`Chronos2Pipeline`** (not the older `ChronosPipeline`). It allows for a high-level Pandas-based workflow.
+*   **Input Data**: Accepts `pd.DataFrame` directly via `predict_df`.
+*   **Covariates**: Pass `future_df` to `predict_df` to include known future features (holidays, promotions).
+*   **Quantiles**: Explicitly request quantiles (e.g., `quantile_levels=[0.1, 0.5, 0.9]`) for anomaly detection bounds.
+*   **Reference Notebook**: [Chronos-2 Quick Start](https://github.com/amazon-science/chronos-forecasting/blob/main/notebooks/chronos-2-quickstart.ipynb)
+
+### 🔴 TimesFM (Google)
+*   **Checkpoint**: Use `google/timesfm-2.5-200m-pytorch`.
+*   **Zero-Shot**: Optimized for long-horizon forecasting without fine-tuning.
+*   **Context/Horizon**: Ensure `context_len` and `horizon_len` are multiples of the patch size (usually 32 or 64).
+*   **Covariates**: Supported via separate input tensors/columns.
+
+---
+
+## 3. Key Models & Papers
 
 ### 🔵 TimesFM (Google)
 *   **Version**: **TimesFM 2.5** (Newer architecture, 200M params).

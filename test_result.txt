@@ -1,0 +1,32 @@
+﻿============================= test session starts =============================
+platform win32 -- Python 3.14.2, pytest-9.0.2, pluggy-1.6.0 -- C:\Dev\OpenAnomaly\.venv\Scripts\python.exe
+cachedir: .pytest_cache
+rootdir: C:\Dev\OpenAnomaly
+configfile: pyproject.toml
+plugins: anyio-4.12.0, asyncio-1.3.0
+asyncio: mode=Mode.STRICT, debug=False, asyncio_default_fixture_loop_scope=None, asyncio_default_test_loop_scope=function
+collecting ... collected 1 item
+
+tests/integration/test_e2e.py::test_e2e_pipeline_execution 
+[0] Clearing VictoriaMetrics data...
+  Deleted boom_.*: 204
+  Deleted openanomaly_.*: 204
+  Deleted e2e_.*: 204
+
+[1] Seeding BOOM data from data\boom_sample.csv...
+  Found 9 series: ['ds_0_T', 'ds_1_T', 'ds_2_5T', 'ds_4_5T', 'ds_5_T', 'ds_8_5T', 'ds_54_10S', 'ds_81_5T', 'ds_84_5T']
+  Seeded 997 points across 9 series.
+
+[2] Creating pipelines.yaml for ds_0_T...
+
+[3] Triggering Celery Task...
+Task ID: 90c47f42-842d-44eb-8532-dc06e11ad3b3. Waiting for result...
+Task Result: Success: boom_pipeline
+
+[4] Verifying Forecast Metrics in VictoriaMetrics...
+Found forecast metrics: 6 series, 16 points
+
+[SUCCESS] E2E Integration Test Passed!
+PASSED
+
+============================= 1 passed in 20.11s ==============================

@@ -1,0 +1,40 @@
+{
+  "citation": "",
+  "config_name": "default",
+  "dataset_name": "ds-100-T",
+  "description": "",
+  "features": {
+    "start": {
+      "dtype": "string",
+      "_type": "Value"
+    },
+    "item_id": {
+      "dtype": "string",
+      "_type": "Value"
+    },
+    "freq": {
+      "dtype": "string",
+      "_type": "Value"
+    },
+    "target": {
+      "feature": {
+        "feature": {
+          "dtype": "float64",
+          "_type": "Value"
+        },
+        "_type": "Sequence"
+      },
+      "_type": "Sequence"
+    }
+  },
+  "homepage": "",
+  "license": "",
+  "splits": {
+    "vars_3": {
+      "name": "test",
+      "num_bytes": 0,
+      "num_examples": 1,
+      "dataset_name": null
+    }
+  }
+}

@@ -105,6 +105,10 @@ class InferenceLoop:
         
         output_metrics = []
         
+        # Extract source metric name from query (sanitize for labels)
+        # e.g., "ds_0_T{source=\"boom\"}" -> "ds_0_T"
+        source_metric = pipeline.query.split("{")[0].strip()
+        
         for _, row in forecast_df.iterrows():
             # Base metric name
             base_name = pipeline.output.metric_prefix + pipeline.name
@@ -112,7 +116,7 @@ class InferenceLoop:
             
             # Write Mean Forecast
             output_metrics.append({
-                "unique_id": f'{base_name}_forecast{{pipeline="{pipeline.name}", type="mean"}}',
+                "unique_id": f'{base_name}_forecast{{pipeline="{pipeline.name}", source="{source_metric}", type="mean"}}',
                 "ds": ts,
                 "y": row["mean"]
             })
@@ -122,7 +126,7 @@ class InferenceLoop:
                 if col.startswith("q_"):
                     quantile = col.split("_")[1]
                     output_metrics.append({
-                        "unique_id": f'{base_name}_forecast{{pipeline="{pipeline.name}", quantile="{quantile}"}}',
+                        "unique_id": f'{base_name}_forecast{{pipeline="{pipeline.name}", source="{source_metric}", quantile="{quantile}"}}',
                         "ds": ts,
                         "y": row[col]
                     })

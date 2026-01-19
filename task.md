@@ -21,21 +21,34 @@
     - [x] Implement `InferenceLoop` in `core/services/` <!-- id: 16 -->
     - [x] Logic: Fetch Data -> Run TSFM -> Score Anomaly (if enabled) -> Write Results <!-- id: 17 -->
 
+## Phase 1.5: Testing (In Progress)
+- [x] **Test Infrastructure** <!-- id: 200 -->
+    - [x] Setup `pytest` and `tests/` directory <!-- id: 201 -->
+- [x] **Unit Tests** <!-- id: 202 -->
+    - [x] `core/domain`: Pipeline & Config validation <!-- id: 203 -->
+    - [x] `adapters/models`: ChronosAdapter (Mocked) <!-- id: 204 -->
+    - [x] `adapters/tsdb`: PrometheusAdapter (Mocked) <!-- id: 205 -->
+    - [x] `services`: InferenceLoop logic <!-- id: 206 -->
+
 ## Phase 2: Productionize
-- [ ] **Dockerization** <!-- id: 18 -->
-    - [ ] **Dockerfile**: Multi-stage build (GPU optional) <!-- id: 19 -->
-    - [ ] **Compose**: Local testing stack <!-- id: 20 -->
-- [ ] **Helm Chart** <!-- id: 21 -->
-    - [ ] Create `charts/openanomaly` <!-- id: 22 -->
-    - [ ] Beat Pod, Worker Pods, API Pod (optional) <!-- id: 23 -->
+- [x] Setup pytest and basic fixtures <!-- id: 18 -->
+- [x] Create integration test suite (`tests/integration`) <!-- id: 19 -->
+	- [x] Test Prometheus Adapter with Real VM <!-- id: 20 -->
+	- [x] Test Chronos Adapter with Model Download <!-- id: 21 -->
+	- [x] Test End-to-End Inference Loop (Dockerized) <!-- id: 22 -->
+- [x] Implement CI/CD pipeline (Optional) <!-- id: 23 -->
 
 ## Phase 3: Management & UI
-- [ ] **API** <!-- id: 24 -->
-    - [ ] FastAPI service with JSON Schema validation <!-- id: 25 -->
-    - [ ] CRUD for pipelines (requires `MongoAdapter`) <!-- id: 26 -->
-- [ ] **UI** <!-- id: 27 -->
-    - [ ] Streamlit Playground for ad-hoc forecasting <!-- id: 28 -->
-    - [ ] Visualization of anomaly scores over time <!-- id: 29 -->
+- [x] **Data Integration** (User Request) <!-- id: 24 -->
+    - [x] Integrate CSV loader into `test_e2e.py` <!-- id: 25 -->
+    - [x] Create sample BOOM-like dataset (`data/boom_sample.csv`) <!-- id: 26 -->
+
+- [ ] **API** <!-- id: 27 -->
+    - [ ] FastAPI service with JSON Schema validation <!-- id: 28 -->
+    - [ ] CRUD for pipelines (requires `MongoAdapter`) <!-- id: 29 -->
+- [ ] **UI** <!-- id: 37 -->
+    - [ ] Streamlit Playground for ad-hoc forecasting <!-- id: 38 -->
+    - [ ] Visualization of anomaly scores over time <!-- id: 39 -->
 
 ## Phase 4: Model Adapters (Research Required)
 - [x] **TSFM Research Guide** <!-- id: 50 -->
@@ -44,6 +57,6 @@
     - [x] Research official documentation and best practices <!-- id: 31 -->
     - [x] Implement `adapters/models/chronos/` <!-- id: 32 -->
 - [ ] **TimesFM Adapter** <!-- id: 33 -->
-    - [ ] Research official documentation and best practices <!-- id: 34 -->
+    - [x] Research official documentation and best practices <!-- id: 34 -->
     - [ ] Implement `adapters/models/timesfm/` <!-- id: 35 -->
 - [ ] **Additional Adapters** (as needed) <!-- id: 36 -->

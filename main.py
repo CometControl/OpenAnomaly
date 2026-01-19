@@ -1,6 +1,6 @@
-def main():
-    print("Hello from openanomaly!")
 
+from openanomaly.main import app, celery_app
 
 if __name__ == "__main__":
-    main()
+    import uvicorn
+    uvicorn.run(app, host="0.0.0.0", port=8000)

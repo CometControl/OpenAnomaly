@@ -1,25 +1,25 @@
 # OpenAnomaly Development Tasks
 
 ## Phase 1: Core Engine
-- [ ] **Environment Setup** <!-- id: 0 -->
+- [x] **Environment Setup** <!-- id: 0 -->
     - [x] **Nix**: Create `flake.nix` for Python 3.11+ <!-- id: 100 -->
-    - [ ] **UV**: Update dependencies (per-model libraries as needed) <!-- id: 101 -->
-    - [ ] `docker-compose.yml`: Redis + VictoriaMetrics for testing <!-- id: 1 -->
-- [ ] **Core Ports & Adapters** <!-- id: 3 -->
-    - [ ] **TSDBClient Port**: Interface for Prometheus Query + Remote Write <!-- id: 4 -->
-    - [ ] **PrometheusAdapter**: Implementation using `requests` <!-- id: 5 -->
-    - [ ] **ModelEngine Port**: Interface for `predict(context) -> forecast` (local or remote) <!-- id: 6 -->
-    - [ ] **RemoteModelAdapter**: HTTP client for external inference endpoints <!-- id: 7 -->
-    - [ ] **ConfigStore Port**: Interface for loading pipeline definitions <!-- id: 8 -->
-    - [ ] **YamlAdapter**: Implementation for file-based config <!-- id: 9 -->
-    - [ ] **Scheduler Port**: Interface for Celery Beat <!-- id: 10 -->
-    - [ ] **CeleryBeatAdapter**: Implementation with SQLite/Redis backend <!-- id: 11 -->
-- [ ] **Domain Models** <!-- id: 12 -->
-    - [ ] **Pipeline dataclass**: Full schema (mode, schedules, covariates, anomaly config) <!-- id: 13 -->
-    - [ ] **JSON Schema**: Generate `pipeline.schema.json` from Pydantic model <!-- id: 14 -->
-- [ ] **Inference Loop Service** <!-- id: 15 -->
-    - [ ] Implement `InferenceLoop` in `core/services/` <!-- id: 16 -->
-    - [ ] Logic: Fetch Data -> Run TSFM -> Score Anomaly (if enabled) -> Write Results <!-- id: 17 -->
+    - [x] **UV**: Update dependencies (per-model libraries as needed) <!-- id: 101 -->
+    - [x] `docker-compose.yml`: Redis + VictoriaMetrics for testing <!-- id: 1 -->
+- [x] **Core Ports & Adapters** <!-- id: 3 -->
+    - [x] **TSDBClient Port**: Interface for Prometheus Query + Remote Write <!-- id: 4 -->
+    - [x] **PrometheusAdapter**: Implementation using `requests` <!-- id: 5 -->
+    - [x] **ModelEngine Port**: Interface for `predict(context) -> forecast` (local or remote) <!-- id: 6 -->
+    - [x] **RemoteModelAdapter**: HTTP client for external inference endpoints <!-- id: 7 -->
+    - [x] **ConfigStore Port**: Interface for loading pipeline definitions <!-- id: 8 -->
+    - [x] **YamlAdapter**: Implementation for file-based config <!-- id: 9 -->
+    - [x] **Scheduler Port**: Interface for Celery Beat <!-- id: 10 -->
+    - [x] **CeleryBeatAdapter**: Implementation with SQLite/Redis backend <!-- id: 11 -->
+- [x] **Domain Models** <!-- id: 12 -->
+    - [x] **Pipeline dataclass**: Full schema (mode, schedules, covariates, anomaly config) <!-- id: 13 -->
+    - [x] **JSON Schema**: Generate `pipeline.schema.json` from Pydantic model <!-- id: 14 -->
+- [x] **Inference Loop Service** <!-- id: 15 -->
+    - [x] Implement `InferenceLoop` in `core/services/` <!-- id: 16 -->
+    - [x] Logic: Fetch Data -> Run TSFM -> Score Anomaly (if enabled) -> Write Results <!-- id: 17 -->
 
 ## Phase 2: Productionize
 - [ ] **Dockerization** <!-- id: 18 -->

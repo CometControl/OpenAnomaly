@@ -11,4 +11,5 @@ dependencies = [
     "pymongo>=4.15.5",
     "streamlit>=1.52.2",
     "uvicorn>=0.40.0",
+    "prometheus-remote-writer>=0.1.0",
 ]

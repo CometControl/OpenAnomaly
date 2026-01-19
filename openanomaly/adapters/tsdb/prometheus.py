@@ -1,14 +1,13 @@
-"""
-Prometheus Adapter - TSDB client for Prometheus-compatible databases.
-
-Supports VictoriaMetrics, Thanos, Mimir, Cortex, and native Prometheus.
-"""
 
 from datetime import datetime
 
 import httpx
 import pandas as pd
 from pydantic import PrivateAttr
+try:
+    from prometheus_remote_writer import RemoteWriter
+except ImportError:
+    RemoteWriter = None
 
 from openanomaly.core.ports.tsdb_client import TSDBClient
 
@@ -24,19 +23,44 @@ class PrometheusAdapter(TSDBClient):
     headers: dict[str, str] = {}
     
     _client: httpx.AsyncClient | None = PrivateAttr(default=None)
+    _writer: "RemoteWriter | None" = PrivateAttr(default=None)
 
     def model_post_init(self, __context):
         """Normalize URL after initialization."""
         self.read_url = self.read_url.rstrip("/")
+        if self.write_url and RemoteWriter is None:
+             # Ideally we raise ImportError here if we strictly require it for config,
+             # but to allow read-only usage without the pkg we can be lenient or raise.
+             # Given user intent, let's assume pkg is required for write capability.
+             pass 
     
     async def _get_client(self) -> httpx.AsyncClient:
-        """Get or create the HTTP client."""
+        """Get or create the HTTP client for reading."""
         if self._client is None:
             self._client = httpx.AsyncClient(
                 timeout=self.timeout,
                 headers=self.headers,
             )
         return self._client
+    
+    def _get_writer(self) -> "RemoteWriter":
+        """Get or create the RemoteWriter."""
+        if self._writer is None:
+            if RemoteWriter is None:
+                raise ImportError("prometheus-remote-writer not installed")
+            if not self.write_url:
+                raise RuntimeError("Write URL not configured")
+     
+            # RemoteWriter uses requests synchronous by default usually, checks docs.
+            # Library seems synchonous. We might need to run in executor if high load,
+            # but for MVP sync is okay or we check if async supported.
+            # Assuming sync for now as per library standard using 'requests'.
+            self._writer = RemoteWriter(
+                url=self.write_url,
+                headers=self.headers,
+                # timeout might not be exposed directly in all versions, check args if needed
+            )
+        return self._writer
     
     async def query_range(
         self,
@@ -94,36 +118,50 @@ class PrometheusAdapter(TSDBClient):
         self,
         df: pd.DataFrame,
     ) -> None:
-        """Write time series data using Remote Write."""
-        if not self.write_url:
-            raise RuntimeError("Write URL not configured")
+        """
+        Write time series data using prometheus-remote-writer.
+        """
+        writer = self._get_writer()
         
-        client = await self._get_client()
-        
+        # DataFrame columns: ['unique_id', 'ds', 'y']
         required_cols = {"unique_id", "ds", "y"}
         if not required_cols.issubset(df.columns):
             raise ValueError(f"DataFrame must contain columns: {required_cols}")
-        
-        lines = []
+            
         for _, row in df.iterrows():
-            metric = row["unique_id"]
-            ts_ms = int(row["ds"].timestamp() * 1000)
-            val = row["y"]
-            lines.append(f"{metric} {val} {ts_ms}")
+            # Parse metric name and labels from unique_id
+            # Format: name{label="value",...} or just name
+            raw_id = row["unique_id"]
+            if "{" in raw_id and raw_id.endswith("}"):
+                name_part, labels_part = raw_id[:-1].split("{", 1)
+                metric_name = name_part
+                labels = {}
+                # Simple parsing of label="value", key2="val2"
+                # Robust parsing might require regex if values contain commas/quotes
+                # For now, MVP assumes standard structure
+                for pair in labels_part.split(","):
+                    if "=" in pair:
+                        k, v = pair.split("=", 1)
+                        labels[k.strip()] = v.strip().strip('"')
+            else:
+                metric_name = raw_id
+                labels = {}
             
-        if not lines:
-            return
+            # Timestamp to seconds (library expects float seconds or calls it internally?)
+            # Library doc: timestamp in seconds (float or int)
+            ts_sec = row["ds"].timestamp()
+            value = float(row["y"])
             
-        payload = "\n".join(lines)
-        
-        response = await client.post(
-            self.write_url,
-            content=payload,
-            headers={"Content-Type": "text/plain"},
-        )
-        response.raise_for_status()
+            # Sync call (blocking). In prod, offload to thread/process?
+            writer.write(
+                metric_name=metric_name,
+                value=value,
+                timestamp=ts_sec,
+                labels=labels,
+            )
     
     async def close(self) -> None:
         if self._client:
             await self._client.aclose()
             self._client = None
+

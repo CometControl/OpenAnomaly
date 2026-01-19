@@ -38,9 +38,11 @@
     - [ ] Visualization of anomaly scores over time <!-- id: 29 -->
 
 ## Phase 4: Model Adapters (Research Required)
+- [x] **TSFM Research Guide** <!-- id: 50 -->
+    - [x] Create `research/TSFM_GUIDE.md` covering models, benchmarks (TAB/TOTO), and datasets (BOOM) <!-- id: 51 -->
 - [ ] **Chronos Adapter** <!-- id: 30 -->
-    - [ ] Research official documentation and best practices <!-- id: 31 -->
-    - [ ] Implement `adapters/models/chronos/` <!-- id: 32 -->
+    - [x] Research official documentation and best practices <!-- id: 31 -->
+    - [x] Implement `adapters/models/chronos/` <!-- id: 32 -->
 - [ ] **TimesFM Adapter** <!-- id: 33 -->
     - [ ] Research official documentation and best practices <!-- id: 34 -->
     - [ ] Implement `adapters/models/timesfm/` <!-- id: 35 -->

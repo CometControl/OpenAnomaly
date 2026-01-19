@@ -1,115 +1,117 @@
 # OpenAnomaly
-> **A distributed, scalable anomaly detection system for Prometheus-compatible Time Series Databases.**
+> **Zero-shot anomaly detection for Prometheus-compatible TSDBs using Time Series Foundation Models.**
 
-![Python 3.14+](https://img.shields.io/badge/python-3.14+-blue.svg)
+![Python 3.11+](https://img.shields.io/badge/python-3.11+-blue.svg)
 ![UV](https://img.shields.io/badge/managed%20by-uv-purple)
 ![License](https://img.shields.io/badge/License-MIT-green.svg)
 
 ## Vision
-OpenAnomaly is a production-grade platform designed to bring advanced **Forecasting and Anomaly Detection** to any **Prometheus-compatible TSDB** (VictoriaMetrics, Thanos, Mimir, etc.).
 
-It utilizes a **Hexagonal Architecture (Ports & Adapters)** to completely isolate the core anomaly detection logic (`Trainer`, `Inferencer`) from the infrastructure, allowing you to **mix and match** components to fit any environment—from a laptop to a global cluster.
+OpenAnomaly brings **real-time anomaly detection** to any **Prometheus-compatible TSDB** (VictoriaMetrics, Thanos, Mimir, Cortex) using **Time Series Foundation Models (TSFMs)** like Chronos, TimesFM, and TOTO.
 
-## Domain Logic
-The core engine is split into two specialized workers that handle the anomaly detection lifecycle:
-
-### 1. The Trainer
-*   **Trigger**: On-demand or Low-frequency schedules (e.g., Weekly).
-*   **Workflow**:
-    1.  Fetch historical data from TSDB (Prometheus API).
-    2.  Fit complex models using the active **ModelEngine** (Nixtla, Darts, etc.).
-    3.  Serialize and save the model artifact to `ArtifactStore`.
-    4.  Update the Model Registry in `ConfigStore`.
-
-### 2. The Inferencer
-*   **Trigger**: High-frequency schedules (e.g., Every 5m).
-*   **Workflow**:
-    1.  Download the "Active" model artifact from `ArtifactStore`.
-    2.  Fetch recent "context" window from TSDB.
-    3.  Generate predictions and anomaly_score.
-    4.  Write results back to TSDB (Remote Write).
+**No training required.** The system uses pre-trained models from HuggingFace for **zero-shot forecasting**. It continuously queries your TSDB, runs inference, and writes anomaly scores back—just like VMAnomaly.
 
 ---
 
-## Architecture: Ports & Adapters
-The system defines standard interfaces ("Ports") that can be satisfied by different plugins ("Adapters"):
+## How It Works
 
-| Port | Responsibility | Adapters (Plugins) |
-| :--- | :--- | :--- |
-| **ConfigStore** | Storing Pipelines & Rules | `MongoAdapter` (DB), `YamlAdapter` (File) |
-| **ArtifactStore** | Storing Model Binaries | `S3Adapter`, `LocalAdapter`, `NoOpAdapter` (Disabled/Stat-Only) |
-| **JobDispatcher** | Running Async Tasks | `CeleryAdapter` (Redis, SQLite, RabbitMQ, etc.) |
-| **UserInterface** | Management & Plots | `StreamlitAdapter` (Optional, swappable) |
-
----
-
-## Configuration (Mix & Match)
-Control the architecture at runtime using **Environment Variables**.
-
-### Preset A: "Standalone" (Single Node)
-*Default single-node setup using files and SQLite. suitable for local dev or small-scale production.*
-```bash
-export OA_CONFIG_STORE="yaml"
-export OA_ARTIFACT_STORE="local"
-export OA_CELERY_BROKER="sqla+sqlite:///celery.db"
 ```
-
-### Preset B: "Cluster" (Enterprise)
-*Full distributed setup using Databases and Object Storage.*
-```bash
-export OA_CONFIG_STORE="mongo"
-export OA_ARTIFACT_STORE="s3"
-export OA_CELERY_BROKER="redis://redis:6379/0"
+┌────────────────────────────────────────────────────────┐
+│                  THE INFERENCE LOOP                    │
+│                                                        │
+│   Scheduler (every N min)                              │
+│        │                                               │
+│        ▼                                               │
+│   Fetch Data (Prometheus Query API)                    │
+│        │                                               │
+│        ▼                                               │
+│   Run TSFM (Chronos/TimesFM/TOTO)                      │
+│        │                                               │
+│        ▼                                               │
+│   Calculate Anomaly Score (Prediction vs Actual)       │
+│        │                                               │
+│        ▼                                               │
+│   Write Results (Remote Write)                         │
+│                                                        │
+└────────────────────────────────────────────────────────┘
 ```
 
 ---
 
-## Tech Stack
-| Component | Choice | Rationale |
+## Supported Models
+
+| Model | Provider | HuggingFace ID |
 | :--- | :--- | :--- |
-| **Engine (Port)** | **Pluggable** | `NixtlaAdapter` (Default), `DartsAdapter`, etc. |
-| **Architecture** | **Hexagonal** | Maximum flexibility via Ports & Adapters |
-| **Compatible TSDBs** | **Prometheus API** | Connects to VictoriaMetrics, Thanos, Mimir, Cortex, etc. |
-| **Object Storage** | **MinIO / S3** | Standard ArtifactStore for model binaries. |
-| **API** | **FastAPI** | Modern dependency injection system |
-| **UI** | **Streamlit** | Interactive UI (Optional Port) |
+| **Chronos** | Amazon | `amazon/chronos-t5-small` |
+| **Chronos-Bolt** | Amazon | `amazon/chronos-bolt-small` |
+| **TimesFM** | Google | `google/timesfm-1.0-200m` |
+| **TOTO** | Datadog | `Datadog/toto` |
 
-## 🛠️ Development Workflow
+---
 
-### 1. Environment Setup (Choose One)
+## Quick Start
 
-#### Option A: `uv` (Recommended for Speed)
+### 1. Install
 ```bash
-# Initialize and sync
 uv sync
 ```
 
-#### Option B: `nix` (Recommended for Hermeticity)
-Uses Nix Flakes to provide Python, UV, and system dependencies in an isolated shell.
+### 2. Configure (Environment Variables)
 ```bash
-nix develop
-# or if using direnv:
-direnv allow
+export OA_MODEL_ID="amazon/chronos-t5-small"
+export OA_TSDB_READ_URL="http://localhost:8428"
+export OA_TSDB_WRITE_URL="http://localhost:8428/api/v1/write"
+export OA_CONFIG_PATH="./config/pipelines.yaml"
 ```
 
-### 2. Running Locally (Standalone Mode)
-After setting up the environment:
-```bash
-# Run the API (Uses YAML config by default)
-uv run uvicorn api.main:app --reload
+### 3. Define Pipelines (`config/pipelines.yaml`)
+```yaml
+pipelines:
+  - name: "cpu_anomaly"
+    query: 'avg(rate(node_cpu_seconds_total{mode="idle"}[5m])) by (instance)'
+    context_window: "1h"
+    prediction_horizon: "5m"
+    schedule: "*/5 * * * *"
+```
 
-# Run the Worker (Uses SQLite broker by default)
-uv run celery -A workers.celery_worker worker -l info --pool=solo
+### 4. Run
+```bash
+python -m openanomaly
 ```
 
 ---
 
-## 🚀 Deployment Options (Future)
-*This section will detail how to deploy OpenAnomaly to production environments.*
+## Architecture
 
-*   **Docker Images**: Official builds for Controller and Workers.
-*   **Helm Chart**: Kubernetes-native deployment.
-*   **Binary**: Self-contained executable (via PyInstaller/Nuitka).
+| Port | Responsibility | Adapters |
+| :--- | :--- | :--- |
+| **TSDBClient** | Read/Write to TSDB | `PrometheusAdapter` |
+| **ModelEngine** | Run zero-shot inference | `ChronosAdapter`, `HuggingFaceAdapter` |
+| **ConfigStore** | Load pipeline definitions | `YamlAdapter`, `MongoAdapter` |
+| **Scheduler** | Trigger inference jobs | `APSchedulerAdapter` |
+
+---
+
+## Development
+
+### Option A: `uv`
+```bash
+uv sync
+```
+
+### Option B: `nix`
+```bash
+nix develop
+```
+
+---
+
+## Deployment
+
+*   **Docker**: Single container, no external dependencies.
+*   **Kubernetes (Helm)**: Deployment with configurable model and TSDB settings.
+
+---
 
 ## License
 [MIT](LICENSE)

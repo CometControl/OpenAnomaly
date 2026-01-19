@@ -28,12 +28,11 @@ These models enable **Zero-Shot Inference**:
     *   [GitHub: google-research/timesfm](https://github.com/google-research/timesfm)
 
 ### 🟠 Chronos (Amazon / AutoGluon)
-*   Two distinct modern variants:
-    1.  **Chronos-2**: Newer **Encoder-only** architecture (not T5-based). Supports multivariate & covariates natively.
-    2.  **Chronos-Bolt**: **T5-based** (Encoder-Decoder) like original Chronos, but significantly faster/optimized.
+*   **Version**: **Chronos-2** (Latest generation, includes `chronos-2-small`).
+*   **Type**: **Encoder-only** architecture (not T5-based). Supports multivariate & covariates natively.
 *   **Resources**:
-    *   [HuggingFace: autogluon/chronos-2-small](https://huggingface.co/autogluon/chronos-2-small) (Chronos-2)
-    *   [HuggingFace: amazon/chronos-bolt-base](https://huggingface.co/amazon/chronos-bolt-base) (Chronos-Bolt)
+    *   [HuggingFace: autogluon/chronos-2-small](https://huggingface.co/autogluon/chronos-2-small)
+    *   [HuggingFace: amazon/chronos-2](https://huggingface.co/amazon/chronos-2)
     *   [GitHub: amazon-science/chronos-forecasting](https://github.com/amazon-science/chronos-forecasting)
 
 ### 🟢 TOTO (Datadog)
@@ -71,7 +70,7 @@ These models enable **Zero-Shot Inference**:
 *   **GitHub**: Contains standard benchmarking code.
 
 ### BOOM Benchmark
-*   **Paper**: *TOTO_BOOM.pdf* (in `research/`).
+*   **Paper**: [Toto: Time Series Optimized Transformer for Observability](https://arxiv.org/abs/2407.07874)
 *   **Description**: A modern large-scale observability benchmark mentioned in the TOTO paper.
 *   **Significance**: Compares TOTO against Chronos, TimesFM, and others. Details computational cost.
 *   **Resources**:

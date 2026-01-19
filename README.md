@@ -7,45 +7,39 @@
 
 ## Vision
 
-OpenAnomaly brings **real-time anomaly detection** to any **Prometheus-compatible TSDB** (VictoriaMetrics, Thanos, Mimir, Cortex) using **Time Series Foundation Models (TSFMs)** like Chronos, TimesFM, and TOTO.
+OpenAnomaly brings **real-time anomaly detection** to any **Prometheus-compatible TSDB** (VictoriaMetrics, Thanos, Mimir, Cortex) using **Time Series Foundation Models (TSFMs)**.
 
-**No training required.** The system uses pre-trained models from HuggingFace for **zero-shot forecasting**. It continuously queries your TSDB, runs inference, and writes anomaly scores back—just like VMAnomaly.
+**No training required.** The system uses pre-trained models for **zero-shot forecasting**. It continuously queries your TSDB, runs inference, and writes anomaly scores back—just like VMAnomaly.
 
 ---
 
 ## How It Works
 
 ```
-┌────────────────────────────────────────────────────────┐
-│                  THE INFERENCE LOOP                    │
-│                                                        │
-│   Scheduler (every N min)                              │
-│        │                                               │
-│        ▼                                               │
-│   Fetch Data (Prometheus Query API)                    │
-│        │                                               │
-│        ▼                                               │
-│   Run TSFM (Chronos/TimesFM/TOTO)                      │
-│        │                                               │
-│        ▼                                               │
-│   Calculate Anomaly Score (Prediction vs Actual)       │
-│        │                                               │
-│        ▼                                               │
-│   Write Results (Remote Write)                         │
-│                                                        │
-└────────────────────────────────────────────────────────┘
+Scheduler (Celery Beat)
+    │
+    ▼
+Fetch Data (Prometheus Query API)
+    │
+    ▼
+Run TSFM (Local or Remote)
+    │
+    ▼
+Calculate Anomaly Score (Optional)
+    │
+    ▼
+Write Results (Remote Write)
 ```
 
 ---
 
-## Supported Models
+## Features
 
-| Model | Provider | HuggingFace ID |
-| :--- | :--- | :--- |
-| **Chronos** | Amazon | `amazon/chronos-t5-small` |
-| **Chronos-Bolt** | Amazon | `amazon/chronos-bolt-small` |
-| **TimesFM** | Google | `google/timesfm-1.0-200m` |
-| **TOTO** | Datadog | `Datadog/toto` |
+*   **Any TSFM**: Use any Time Series Foundation Model available on HuggingFace.
+*   **Local or Remote Models**: Run models locally or call external inference endpoints.
+*   **Flexible Modes**: Forecast-only, Anomaly Detection, or both.
+*   **Rich Configuration**: Step size, covariates, confidence techniques, per-pipeline settings.
+*   **JSON Schema**: API and config validated with JSON Schema for easy integration.
 
 ---
 
@@ -56,27 +50,30 @@ OpenAnomaly brings **real-time anomaly detection** to any **Prometheus-compatibl
 uv sync
 ```
 
-### 2. Configure (Environment Variables)
-```bash
-export OA_MODEL_ID="amazon/chronos-t5-small"
-export OA_TSDB_READ_URL="http://localhost:8428"
-export OA_TSDB_WRITE_URL="http://localhost:8428/api/v1/write"
-export OA_CONFIG_PATH="./config/pipelines.yaml"
-```
-
-### 3. Define Pipelines (`config/pipelines.yaml`)
+### 2. Configure (`config/pipelines.yaml`)
 ```yaml
 pipelines:
   - name: "cpu_anomaly"
     query: 'avg(rate(node_cpu_seconds_total{mode="idle"}[5m])) by (instance)'
     context_window: "1h"
-    prediction_horizon: "5m"
-    schedule: "*/5 * * * *"
+    prediction_horizon: "15m"
+    mode: "forecast_and_anomaly"
+    forecast_schedule: "*/5 * * * *"
+    model:
+      type: "remote"
+      endpoint: "http://gpu-server:8000/predict"
+    anomaly:
+      technique: "confidence_interval"
+      confidence_level: 0.95
 ```
 
-### 4. Run
+### 3. Run
 ```bash
-python -m openanomaly
+# Set broker (SQLite for standalone)
+export OA_CELERY_BROKER="sqla+sqlite:///celery.db"
+
+# Run worker with beat
+celery -A openanomaly.worker worker -B -l info
 ```
 
 ---
@@ -86,21 +83,19 @@ python -m openanomaly
 | Port | Responsibility | Adapters |
 | :--- | :--- | :--- |
 | **TSDBClient** | Read/Write to TSDB | `PrometheusAdapter` |
-| **ModelEngine** | Run zero-shot inference | `ChronosAdapter`, `HuggingFaceAdapter` |
-| **ConfigStore** | Load pipeline definitions | `YamlAdapter`, `MongoAdapter` |
-| **Scheduler** | Trigger inference jobs | `APSchedulerAdapter` |
+| **ModelEngine** | Run inference | Local adapters, `RemoteAdapter` |
+| **ConfigStore** | Load pipelines | `YamlAdapter`, `MongoAdapter` |
+| **Scheduler** | Trigger jobs | `CeleryBeatAdapter` |
 
 ---
 
 ## Development
 
-### Option A: `uv`
 ```bash
+# Option A: uv
 uv sync
-```
 
-### Option B: `nix`
-```bash
+# Option B: nix
 nix develop
 ```
 
@@ -108,8 +103,9 @@ nix develop
 
 ## Deployment
 
-*   **Docker**: Single container, no external dependencies.
-*   **Kubernetes (Helm)**: Deployment with configurable model and TSDB settings.
+*   **Standalone**: Single process with SQLite Beat.
+*   **Distributed**: Redis broker + multiple workers.
+*   **Kubernetes**: Helm chart with Beat/Worker/API pods.
 
 ---
 

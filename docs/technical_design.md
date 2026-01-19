@@ -2,28 +2,29 @@
 
 ## 1. Vision
 
-OpenAnomaly is a lightweight, zero-shot anomaly detection system for **Prometheus-compatible TSDBs** (VictoriaMetrics, Thanos, Mimir, Cortex, etc.).
+OpenAnomaly is a zero-shot anomaly detection system for **Prometheus-compatible TSDBs** (VictoriaMetrics, Thanos, Mimir, Cortex, etc.).
 
-It leverages **Time Series Foundation Models (TSFMs)** from the HuggingFace ecosystem—such as **Chronos**, **TimesFM**, and **TOTO**—to perform inference without any prior training on your specific data.
+It leverages **Time Series Foundation Models (TSFMs)** from the HuggingFace ecosystem to perform inference without any prior training on your specific data.
 
 ### Key Tenets
 1.  **Zero Training Required**: Uses pre-trained foundation models. No model fitting, no weight storage.
-2.  **Real-Time Scoring**: Continuously queries the TSDB, runs inference, and writes anomaly scores back.
+2.  **Real-Time Scoring**: Continuously queries the TSDB, runs inference, and writes results back.
 3.  **TSDB Agnostic**: Speaks standard Prometheus Query API and Remote Write protocol.
-4.  **Pluggable Models**: Swap foundation models via configuration (HuggingFace model IDs).
+4.  **Pluggable Models**: Any TSFM available on HuggingFace is a potential model.
+5.  **Flexible Modes**: Forecast-only, Anomaly Detection, or both.
 
 ---
 
 ## 2. How It Works (The Loop)
 
-OpenAnomaly operates in a simple, continuous loop, similar to VMAnomaly:
+OpenAnomaly operates in a continuous loop, similar to VMAnomaly:
 
 ```
 ┌──────────────────────────────────────────────────────────────────┐
 │                        THE INFERENCE LOOP                        │
 │                                                                  │
 │  ┌─────────────────┐                                             │
-│  │   1. SCHEDULER  │  (Triggers job every N minutes)             │
+│  │   1. SCHEDULER  │  (Celery Beat triggers job)                 │
 │  └────────┬────────┘                                             │
 │           │                                                       │
 │           ▼                                                       │
@@ -38,7 +39,7 @@ OpenAnomaly operates in a simple, continuous loop, similar to VMAnomaly:
 │           │                                                       │
 │           ▼                                                       │
 │  ┌─────────────────┐                                             │
-│  │ 4. SCORE ANOMALY│  (Compare prediction vs. actual)            │
+│  │ 4. SCORE ANOMALY│  (Compare prediction vs. actual - Optional) │
 │  └────────┬────────┘                                             │
 │           │                                                       │
 │           ▼                                                       │
@@ -53,16 +54,14 @@ OpenAnomaly operates in a simple, continuous loop, similar to VMAnomaly:
 
 ## 3. Architecture: Hexagonal (Ports & Adapters)
 
-We retain the **Hexagonal Architecture** for flexibility, but the ports are simplified.
-
 ### Core Ports
 
 | Port | Responsibility | Adapters |
 | :--- | :--- | :--- |
 | **`TSDBClient`** | Read (Query) and Write (Remote Write) to TSDB | `PrometheusAdapter` |
-| **`ModelEngine`** | Run zero-shot forecast inference | `ChronosAdapter`, `TimesFMAdapter`, `HuggingFaceAdapter` |
-| **`ConfigStore`** | Persist pipeline definitions (queries, schedules) | `YamlAdapter` (File), `MongoAdapter` (DB) |
-| **`Scheduler`** | Trigger inference jobs on a schedule | `APSchedulerAdapter`, `CeleryBeatAdapter` |
+| **`ModelEngine`** | Run zero-shot forecast inference | Local or Remote adapters (see Section 4) |
+| **`ConfigStore`** | Persist pipeline definitions | `YamlAdapter` (File), `MongoAdapter` (DB) |
+| **`Scheduler`** | Trigger inference jobs on a schedule | `CeleryBeatAdapter` |
 
 ### Removed Ports (vs. Previous Design)
 *   ~~`ArtifactStore`~~: No model weights to store.
@@ -70,43 +69,102 @@ We retain the **Hexagonal Architecture** for flexibility, but the ports are simp
 
 ---
 
-## 4. Supported Foundation Models
+## 4. Model Engine: Local & Remote
 
-Models are loaded via HuggingFace `transformers` or dedicated libraries. The user specifies a model ID.
+The `ModelEngine` Port supports two modes of operation:
 
-| Model | Provider | HuggingFace ID | Notes |
-| :--- | :--- | :--- | :--- |
-| **Chronos** | Amazon | `amazon/chronos-t5-*` | T5-based, zero-shot probabilistic forecasting. |
-| **Chronos-Bolt** | Amazon | `amazon/chronos-bolt-*` | Faster variant of Chronos. |
-| **TimesFM** | Google | `google/timesfm-*` | 200M param decoder-only model. |
-| **TOTO** | Datadog | `Datadog/toto` | Trained on 1T observability data points. |
+### A. Local Model Adapters
+Each TSFM requires its **dedicated library** and deep research on official documentation for capabilities and best practices.
 
-*Configuration*: `OA_MODEL_ID="amazon/chronos-t5-small"`
+**Implementation Pattern:**
+```
+adapters/models/
+├── base.py              # Abstract ModelEngine interface
+├── chronos/             # Amazon Chronos (uses `chronos-forecasting` lib)
+│   ├── __init__.py
+│   └── adapter.py       # ChronosAdapter - requires research on official guide
+├── timesfm/             # Google TimesFM (uses `timesfm` lib)
+│   └── adapter.py
+└── ...                  # Each new model = new adapter package
+```
+
+### B. Remote Model Adapter
+For models running on external infrastructure (e.g., dedicated GPU server, cloud endpoint).
+
+**Interface Contract (HTTP/gRPC):**
+```json
+POST /predict
+{
+  "context": [1.2, 3.4, 5.6, ...],    // Historical values
+  "prediction_length": 12,            // Horizon
+  "quantiles": [0.1, 0.5, 0.9]        // Optional
+}
+Response:
+{
+  "forecast": [7.8, 9.0, ...],
+  "quantiles": {...}                  // If requested
+}
+```
+
+*Configuration*: `OA_MODEL_TYPE="remote"`, `OA_MODEL_ENDPOINT="http://gpu-server:8000/predict"`
 
 ---
 
-## 5. Configuration
+## 5. Pipeline Configuration (JSON Schema)
 
-### Environment Variables
+Pipeline definitions follow a **JSON Schema** for validation and easy integration with other systems.
 
-| Env Var | Description | Example |
-| :--- | :--- | :--- |
-| `OA_MODEL_ID` | HuggingFace model ID for the TSFM. | `amazon/chronos-t5-small` |
-| `OA_TSDB_READ_URL` | Prometheus Query API endpoint. | `http://victoria:8428` |
-| `OA_TSDB_WRITE_URL` | Prometheus Remote Write endpoint. | `http://victoria:8428/api/v1/write` |
-| `OA_CONFIG_STORE` | Where to load pipeline definitions. | `yaml` or `mongo` |
-| `OA_CONFIG_PATH` | Path to YAML config (if `yaml`). | `./config/pipelines.yaml` |
-
-### Pipeline Definition (YAML Example)
+### Full Pipeline Schema
 
 ```yaml
 pipelines:
   - name: "cpu_anomaly"
+    description: "Detect anomalies in CPU idle time"
+    enabled: true
+
+    # --- Data Source ---
     query: 'avg(rate(node_cpu_seconds_total{mode="idle"}[5m])) by (instance)'
-    context_window: "1h"      # Fetch 1 hour of history for context
-    prediction_horizon: "5m"  # Predict the next 5 minutes
-    schedule: "*/5 * * * *"   # Run every 5 minutes
-    model_id: "amazon/chronos-t5-small" # Override global model per-pipeline
+    step: "1m"                          # Resolution/step size for query
+
+    # --- Time Windows ---
+    context_window: "1h"                # History to fetch for model context
+    prediction_horizon: "15m"           # How far ahead to predict
+
+    # --- Mode ---
+    mode: "forecast_and_anomaly"        # Options: "forecast_only", "anomaly_only", "forecast_and_anomaly"
+
+    # --- Scheduling ---
+    forecast_schedule: "*/5 * * * *"    # Cron for forecast job
+    anomaly_schedule: "*/1 * * * *"     # Cron for anomaly scoring (can differ)
+
+    # --- Series Type ---
+    series_type: "univariate"           # Options: "univariate", "multivariate", "covariate"
+    covariates:                         # Only if series_type includes covariates
+      - query: 'node_memory_MemFree_bytes'
+        name: "memory_free"
+
+    # --- Model Configuration ---
+    model:
+      type: "local"                     # Options: "local", "remote"
+      id: "amazon/chronos-t5-small"     # HuggingFace ID (if local)
+      endpoint: null                    # URL (if remote)
+      parameters:                       # Model-specific parameters
+        num_samples: 20                 # Number of sample paths for probabilistic forecast
+        temperature: 1.0                # Sampling temperature
+        top_k: 50                       # Top-k sampling
+        top_p: 1.0                      # Top-p (nucleus) sampling
+
+    # --- Anomaly Detection ---
+    anomaly:
+      technique: "confidence_interval"  # Options: "confidence_interval", "z_score", "iqr", "isolation_forest"
+      confidence_level: 0.95            # For confidence_interval
+      threshold: 3.0                    # For z_score (number of std deviations)
+
+    # --- Output ---
+    output:
+      write_forecast: true              # Write predicted values to TSDB
+      write_anomaly_score: true         # Write anomaly scores to TSDB
+      metric_prefix: "openanomaly_"     # Prefix for output metrics
 ```
 
 ---
@@ -116,10 +174,10 @@ pipelines:
 | Component | Choice | Rationale |
 | :--- | :--- | :--- |
 | **Language** | Python | Standard for ML/DS. |
-| **Model Engine** | HuggingFace Transformers / Chronos | Access to leading TSFMs. |
+| **Model Engine** | Per-model dedicated libraries | Each TSFM has its own library and API. |
 | **TSDB Interface** | Prometheus API | Universal compatibility. |
-| **Scheduler** | APScheduler / Celery Beat | Lightweight or distributed scheduling. |
-| **API** | FastAPI | For optional management API. |
+| **Scheduler** | Celery Beat | Distributed scheduling with persistence. |
+| **API** | FastAPI + JSON Schema | OpenAPI spec with schema validation for integration. |
 | **UI** | Streamlit | For optional playground/visualization. |
 
 ---
@@ -131,28 +189,36 @@ openanomaly/
 ├── core/
 │   ├── ports/
 │   │   ├── tsdb_client.py      # Interface for Prometheus Read/Write
-│   │   ├── model_engine.py     # Interface for TSFM inference
+│   │   ├── model_engine.py     # Interface for TSFM inference (local or remote)
 │   │   ├── config_store.py     # Interface for loading pipelines
-│   │   └── scheduler.py        # Interface for scheduling jobs
+│   │   └── scheduler.py        # Interface for Celery Beat
 │   ├── domain/
-│   │   └── pipeline.py         # Pipeline, AnomalyResult data classes
+│   │   ├── pipeline.py         # Pipeline dataclass (matches JSON Schema)
+│   │   └── result.py           # ForecastResult, AnomalyResult
 │   └── services/
 │       └── inference_loop.py   # Core business logic (the loop)
 │
 ├── adapters/
 │   ├── models/
-│   │   ├── chronos.py          # ChronosAdapter
-│   │   └── huggingface.py      # Generic HuggingFaceAdapter
+│   │   ├── base.py             # Abstract base for all model adapters
+│   │   ├── remote.py           # RemoteModelAdapter (HTTP client)
+│   │   ├── chronos/            # ChronosAdapter (local, dedicated lib)
+│   │   └── timesfm/            # TimesFMAdapter (local, dedicated lib)
 │   ├── tsdb/
 │   │   └── prometheus.py       # PrometheusAdapter (Query + Remote Write)
 │   ├── config/
 │   │   ├── yaml_store.py
 │   │   └── mongo_store.py
 │   └── schedulers/
-│       └── apscheduler.py
+│       └── celery_beat.py      # CeleryBeatAdapter
 │
-├── api/                        # Optional FastAPI management
-│   └── main.py
+├── api/                        # FastAPI with JSON Schema
+│   ├── main.py
+│   └── schemas/                # Pydantic models (auto-generate JSON Schema)
+│       └── pipeline.py
+│
+├── schemas/                    # JSON Schema definitions (for external use)
+│   └── pipeline.schema.json
 │
 └── cli/                        # Main entrypoint
     └── main.py                 # `python -m openanomaly`
@@ -162,42 +228,41 @@ openanomaly/
 
 ## 8. Deployment
 
-### A. Standalone (Single Process)
-Run as a single Python process. Ideal for small-scale or local testing.
+### A. Standalone (Single Process + SQLite Beat)
 ```bash
-# Set environment variables
-export OA_MODEL_ID="amazon/chronos-t5-small"
-export OA_TSDB_READ_URL="http://localhost:8428"
-export OA_TSDB_WRITE_URL="http://localhost:8428/api/v1/write"
+export OA_CELERY_BROKER="sqla+sqlite:///celery.db"
 export OA_CONFIG_PATH="./config/pipelines.yaml"
 
-# Run
-python -m openanomaly
+# Run worker + beat
+celery -A openanomaly.worker worker -B -l info
 ```
 
-### B. Docker
+### B. Distributed (Redis + MongoDB)
 ```bash
-docker run -e OA_MODEL_ID="amazon/chronos-t5-small" \
-           -e OA_TSDB_READ_URL="..." \
-           -v ./config:/app/config \
-           openanomaly:latest
+export OA_CELERY_BROKER="redis://redis:6379/0"
+export OA_CONFIG_STORE="mongo"
+
+# Separate processes for scaling
+celery -A openanomaly.worker beat -l info          # Scheduler
+celery -A openanomaly.worker worker -l info -Q inference  # Workers
 ```
 
 ### C. Kubernetes (Helm)
-The Helm chart deploys OpenAnomaly as a **Deployment** (not a CronJob, since it runs its own internal scheduler).
-*   **No external dependencies required** (unlike previous design with Redis/Mongo/MinIO).
-*   Optionally connect to an external MongoDB for dynamic pipeline management via API.
+*   **Beat Pod**: Single replica running Celery Beat.
+*   **Worker Pods**: Scaled based on pipeline count.
+*   **API Pod**: Optional, for dynamic pipeline management.
 
 ---
 
 ## 9. Scaling Strategy
 
 ### A. Vertical Scaling (Scale Up)
-*   **CPU**: Sufficient for smaller models like `chronos-t5-tiny` or `chronos-t5-small`.
-*   **GPU**: Recommended for larger models (`chronos-t5-large`, `timesfm`). The model engine auto-detects CUDA.
+*   **CPU**: Sufficient for smaller models.
+*   **GPU**: Recommended for larger models. Model engine auto-detects CUDA.
 
 ### B. Horizontal Scaling (Scale Out)
-For many pipelines, run multiple OpenAnomaly instances, each responsible for a subset of pipelines (sharding by pipeline name or label).
+*   Run multiple Worker pods, each pulling jobs from shared queue.
+*   Celery handles load balancing automatically.
 
 ---
 
@@ -205,15 +270,16 @@ For many pipelines, run multiple OpenAnomaly instances, each responsible for a s
 
 1.  **Phase 1: Core Engine**
     *   Implement `TSDBClient` Port + `PrometheusAdapter`.
-    *   Implement `ModelEngine` Port + `ChronosAdapter`.
+    *   Implement `ModelEngine` Port + `RemoteAdapter` + one local adapter.
     *   Implement `ConfigStore` Port + `YamlAdapter`.
+    *   Implement `Scheduler` Port + `CeleryBeatAdapter`.
     *   Implement the main `InferenceLoop` service.
 
 2.  **Phase 2: Productionize**
-    *   Add `APSchedulerAdapter` for scheduling.
+    *   Define JSON Schema for pipelines.
     *   Dockerize the application.
     *   Create Helm chart.
 
 3.  **Phase 3: Management & UI**
-    *   Add FastAPI for CRUD on pipelines (requires `MongoAdapter`).
+    *   Add FastAPI for CRUD on pipelines (with JSON Schema validation).
     *   Add Streamlit UI for visualization and playground.

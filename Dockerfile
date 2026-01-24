@@ -11,21 +11,16 @@ RUN apt-get update && apt-get install -y git && rm -rf /var/lib/apt/lists/*
 RUN pip install uv
 
 # Copy dependency files
-COPY pyproject.toml .
-# COPY uv.lock . # Uncomment if lock file exists and is stable
+# Copy dependency files
+COPY pyproject.toml uv.lock ./
 
-# Create virtual environment and install dependencies
-# We install into a virtual environment that we can copy over
-ENV VIRTUAL_ENV=/app/.venv
-RUN uv venv $VIRTUAL_ENV --python /usr/local/bin/python
-ENV PATH="$VIRTUAL_ENV/bin:$PATH"
-
-# Install dependencies
+# Install dependencies (sync utilizes the lockfile for deterministic builds)
+# We use --frozen to ensure we don't modify the lockfile during build
 ARG INSTALL_ML=false
 RUN if [ "$INSTALL_ML" = "true" ]; then \
-        uv pip install --python $VIRTUAL_ENV -e ".[ml]"; \
+        uv sync --locked --no-dev --extra ml; \
     else \
-        uv pip install --python $VIRTUAL_ENV -e .; \
+        uv sync --locked --no-dev; \
     fi
 
 # 2. Runtime Stage: Minimal image

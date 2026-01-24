@@ -123,16 +123,27 @@ For models running on external infrastructure (e.g., dedicated GPU server, cloud
 **Interface Contract (HTTP/gRPC):**
 ```json
 ```json
-POST /execute/forecast (Stateless)
+POST /execute/inference (Stateless)
 {
   ...Pipeline Configuration Object...
 }
 Response:
 {
-  "data": [{"ds": "2024...", "unique_id": "...", "mean": 1.2, ...}, ...],
-  "meta": {"rows": 12, "columns": ["ds", "unique_id", "mean", ...]}
+  "status": "success",
+  "message": "Inference executed and results written to TSDB"
+}
+
+POST /execute/train (Stateless)
+{
+  ...Pipeline Configuration Object...
+}
+Response:
+{
+  "status": "success",
+  "model_id": "model_v2_123"
 }
 ```
+
 
 ```json
 POST http://remote-host/custom/predict

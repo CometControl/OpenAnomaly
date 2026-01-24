@@ -3,3 +3,8 @@ redis_url: "redis://localhost:6379/0"
 victoriametrics_url: "http://localhost:8428"
 # victoriametrics_write_url: "http://localhost:8428/api/v1/write" # Optional override
 pipelines_file: "pipelines.yaml"
+
+# Config Store (yaml or mongo)
+config_store_type: "yaml"
+mongo_url: "mongodb://localhost:27017"
+mongo_db_name: "openanomaly"

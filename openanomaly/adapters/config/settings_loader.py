@@ -41,4 +41,10 @@ def load_settings(path: str | None = None) -> SystemSettings:
     if os.getenv("OA_PIPELINES_FILE"):
         config_data["pipelines_file"] = os.getenv("OA_PIPELINES_FILE")
 
+    if os.getenv("MONGO_URL"):
+        config_data["mongo_url"] = os.getenv("MONGO_URL")
+
+    if os.getenv("OA_CONFIG_STORE_TYPE"):
+        config_data["config_store_type"] = os.getenv("OA_CONFIG_STORE_TYPE")
+
     return SystemSettings(**config_data)

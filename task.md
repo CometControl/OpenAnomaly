@@ -72,6 +72,13 @@
     - [x] API Test: `POST /pipelines/{name}/inference` & `/train` <!-- id: 68 -->
     - [x] API Test: `POST /execute/inference` & `/train` <!-- id: 69 -->
 
+- [x] **MongoDB Config Store** (User Request) <!-- id: 70 -->
+    - [x] Update `SystemSettings` with Mongo fields <!-- id: 71 -->
+    - [x] Implement `MongoConfigStore` adapter (Motor) <!-- id: 72 -->
+    - [x] Implement `get_config_store` factory in `main.py` <!-- id: 73 -->
+    - [x] Update Celery tasks to use factory <!-- id: 74 -->
+    - [x] Add unit/integration tests for Mongo Store <!-- id: 75 -->
+
 - [ ] **Management API (MongoDB + FastAPI)** <!-- id: 3 -->
     - [ ] FastAPI service with JSON Schema validation <!-- id: 28 -->
     - [ ] CRUD for pipelines (requires `MongoAdapter`) <!-- id: 29 -->

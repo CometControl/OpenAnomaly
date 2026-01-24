@@ -11,6 +11,22 @@ from openanomaly.core.services.inference_loop import InferenceLoop
 from openanomaly.adapters.config.yaml_store import YamlConfigStore
 from openanomaly.adapters.config.settings_loader import load_settings
 from openanomaly.core.domain.pipeline import Pipeline
+from openanomaly.core.ports.config_store import ConfigStore
+from openanomaly.core.domain.settings import SystemSettings
+
+def get_config_store(settings: SystemSettings) -> ConfigStore:
+    """
+    Factory to create the appropriate ConfigStore based on settings.
+    """
+    if settings.config_store_type == "mongo":
+        try:
+            from openanomaly.adapters.config.mongo_store import MongoConfigStore
+            return MongoConfigStore(settings)
+        except ImportError:
+            logger.error("pymongo/motor not installed. Falling back to YAML store.")
+            return YamlConfigStore(config_path=settings.pipelines_file)
+    
+    return YamlConfigStore(config_path=settings.pipelines_file)
 
 # Logging
 logging.basicConfig(level=logging.INFO)
@@ -128,8 +144,7 @@ def run_inference_task(pipeline_name: str):
     
     async def _execute():
         # 1. Load Pipeline Configuration
-        # Assuming pipelines.yaml is in the current working directory
-        config_store = YamlConfigStore(config_path=settings.pipelines_file)
+        config_store = get_config_store(settings)
         
         # Load pipeline to get model config
         pipeline = await config_store.get_pipeline(pipeline_name)
@@ -182,7 +197,7 @@ def run_training_task(pipeline_name: str):
     
     async def _execute():
         # 1. Load Pipeline Configuration
-        config_store = YamlConfigStore(config_path=settings.pipelines_file)
+        config_store = get_config_store(settings)
         pipeline = await config_store.get_pipeline(pipeline_name)
         if not pipeline:
             logger.error(f"Pipeline '{pipeline_name}' not found.")

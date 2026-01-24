@@ -50,10 +50,10 @@
     - [x] Implement `run_training_task` logic (fetch data -> train -> log) <!-- id: 44 -->
     - [x] Create `RemoteTrainableAdapter` (Implemented in `RemoteModelAdapter`) <!-- id: 45 -->
 
-- [x] **Flexible Serialization** (User Request) <!-- id: 46 -->
-    - [x] Update `ModelConfig` with `serialization_format` (json/parquet) <!-- id: 47 -->
-    - [x] Update `RemoteModelAdapter` to handle parquet serialization <!-- id: 48 -->
-    - [x] Update `technical_design.md` with format info <!-- id: 49 -->
+- [x] **Flexible Serialization** (User Request) <!-- id: 50 -->
+    - [x] Update `ModelConfig` with `serialization_format` field (json/arrow) <!-- id: 51 -->
+    - [x] Update `RemoteModelAdapter` to handle arrow (Feather) serialization <!-- id: 52 -->
+    - [x] Update `technical_design.md` with arrow capabilities <!-- id: 53 -->
 
 - [ ] **Management API (MongoDB + FastAPI)** <!-- id: 3 -->
     - [ ] FastAPI service with JSON Schema validation <!-- id: 28 -->

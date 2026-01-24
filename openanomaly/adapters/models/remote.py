@@ -41,16 +41,15 @@ class RemoteModelAdapter(ModelEngine):
         """Call the remote inference endpoint."""
         client = await self._get_client()
         
-        if self.serialization_format == "parquet":
-            # Parquet Serialization
+        if self.serialization_format == "arrow":
+            # Arrow Serialization (Feather/IPC)
             import io
             buffer = io.BytesIO()
-            df.to_parquet(buffer)
+            df.to_feather(buffer)
             buffer.seek(0)
             
-            # For Parquet, we send multipart/form-data or raw bytes with metadata headers
-            # Simplest for hybrid (config + data) is multipart
-            files = {"data": ("data.parquet", buffer, "application/octet-stream")}
+            # Send as multipart
+            files = {"data": ("data.arrow", buffer, "application/vnd.apache.arrow.file")}
             data_payload = {"request": request.model_dump_json()}
             
             response = await client.post(
@@ -111,14 +110,14 @@ class RemoteModelAdapter(ModelEngine):
         import json
         client = await self._get_client()
         
-        if self.serialization_format == "parquet":
-            # Parquet Serialization
+        if self.serialization_format == "arrow":
+            # Arrow Serialization (Feather/IPC)
             import io
             buffer = io.BytesIO()
-            df.to_parquet(buffer)
+            df.to_feather(buffer)
             buffer.seek(0)
             
-            files = {"data": ("training_data.parquet", buffer, "application/octet-stream")}
+            files = {"data": ("training_data.arrow", buffer, "application/vnd.apache.arrow.file")}
             data_payload = {"parameters": json.dumps(parameters)}
             
             response = await client.post(

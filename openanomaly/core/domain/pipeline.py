@@ -47,6 +47,7 @@ class TrainingConfig(BaseModel):
     enabled: bool = True
     schedule: str = "0 0 * * *"  # Daily at midnight
     window: str = "30d"  # Lookback window for training data
+    endpoint: str | None = None  # Full URL for training (e.g. http://host/fit)
     parameters: dict = Field(default_factory=dict)  # Training-specific parameters
 
 

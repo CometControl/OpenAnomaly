@@ -54,10 +54,15 @@ def run_inference_task(pipeline_name: str):
         
         if pipeline.model.type == "remote":
             from openanomaly.adapters.models.remote import RemoteModelAdapter
-            # Ensure endpoint is provided
+            # Ensure prediction endpoint is provided (mapped from model.endpoint)
             if not pipeline.model.endpoint:
                 raise ValueError("Endpoint required for remote model")
-            model = RemoteModelAdapter(endpoint=pipeline.model.endpoint, **pipeline.model.parameters)
+            
+            # Use model.endpoint as prediction_endpoint
+            model = RemoteModelAdapter(
+                prediction_endpoint=pipeline.model.endpoint,
+                **pipeline.model.parameters
+            )
         else:
             model = ChronosAdapter(model_id=pipeline.model.id)
         
@@ -98,7 +103,15 @@ def run_training_task(pipeline_name: str):
             from openanomaly.adapters.models.remote import RemoteModelAdapter
             if not pipeline.model.endpoint:
                  raise ValueError("Endpoint required for remote model")
-            model = RemoteModelAdapter(endpoint=pipeline.model.endpoint, **pipeline.model.parameters)
+            
+            # Pass both endpoints
+            training_endpoint = pipeline.training.endpoint if pipeline.training else None
+            
+            model = RemoteModelAdapter(
+                prediction_endpoint=pipeline.model.endpoint,
+                training_endpoint=training_endpoint,
+                **pipeline.model.parameters
+            )
         else:
             # Local models (Chronos) generally don't support training via this task yet
             # But we instantiate anyway to allow the adapter to handle it (e.g. log skip)

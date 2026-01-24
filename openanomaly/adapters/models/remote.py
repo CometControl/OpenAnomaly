@@ -17,14 +17,15 @@ class RemoteModelAdapter(ModelEngine):
     Model adapter that calls external inference endpoints via HTTP.
     Configured via Pydantic model fields.
     """
-    endpoint: str
+    prediction_endpoint: str
+    training_endpoint: str | None = None
     timeout: float = 30.0
     headers: dict[str, str] = {}
     
     _client: httpx.AsyncClient | None = PrivateAttr(default=None)
     
     def model_post_init(self, __context):
-        self.endpoint = self.endpoint.rstrip("/")
+        pass  # Endpoints are now full URLs, no stripping needed
     
     async def _get_client(self) -> httpx.AsyncClient:
         """Get or create the HTTP client."""
@@ -45,7 +46,7 @@ class RemoteModelAdapter(ModelEngine):
         payload["context"] = context_values
         
         response = await client.post(
-            f"{self.endpoint}/predict",
+            self.prediction_endpoint,
             json=payload,
         )
         response.raise_for_status()
@@ -84,6 +85,9 @@ class RemoteModelAdapter(ModelEngine):
         parameters: dict[str, Any]
     ) -> str:
         """Call the remote training endpoint."""
+        if not self.training_endpoint:
+            raise ValueError("Training endpoint not configured for this remote model")
+
         import json
         client = await self._get_client()
         
@@ -97,7 +101,7 @@ class RemoteModelAdapter(ModelEngine):
         }
         
         response = await client.post(
-            f"{self.endpoint}/train",
+            self.training_endpoint,
             json=payload,
         )
         response.raise_for_status()
@@ -113,12 +117,17 @@ class RemoteModelAdapter(ModelEngine):
 
     async def health_check(self) -> bool:
         """Check if the remote server is healthy."""
+        # We assume a GET request to the prediction endpoint (or base) might verify health
+        # But since we have full URLs, it's ambiguous. 
+        # Strategy: Try HEAD/GET on prediction endpoint.
         try:
             client = await self._get_client()
-            response = await client.get(f"{self.endpoint}/health")
-            return response.status_code == 200
+            # Try plain GET on prediction endpoint - many APIs respond 405 or 200
+            response = await client.get(self.prediction_endpoint)
+            return response.status_code < 500
         except Exception:
             return False
+
     
     async def close(self) -> None:
         """Close the HTTP client."""

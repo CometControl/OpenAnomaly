@@ -122,31 +122,25 @@ For models running on external infrastructure (e.g., dedicated GPU server, cloud
 
 **Interface Contract (HTTP/gRPC):**
 ```json
-POST /predict
+POST http://remote-host/custom/predict
 {
   "context": [1.2, 3.4, ...],
   "prediction_length": 12,
   "quantiles": [0.1, 0.5, 0.9]
 }
-Response:
-{
-  "forecast": [7.8, ...],
-  "quantiles": {...}
-}
+...
 
-POST /train (Optional)
+POST http://remote-host/custom/train
 {
-  "data": [{"ds": "2024-01-01T00:00:00Z", "unique_id": "ts1", "y": 1.2}, ...],
-  "parameters": {"epochs": 10}
-}
-Response:
-{
-  "model_id": "model_v2_123"
+  "data": [...],
+  "parameters": {...}
 }
 ```
 
+*Configuration*: 
+- Prediction: `model.endpoint` = "http://remote-host/custom/predict"
+- Training: `training.endpoint` = "http://remote-host/custom/train"
 
-*Configuration*: `OA_MODEL_TYPE="remote"`, `OA_MODEL_ENDPOINT="http://gpu-server:8000/predict"`
 
 ---
 
@@ -186,20 +180,21 @@ pipelines:
     # --- Model Configuration ---
     model:
       type: "local"                     # Options: "local", "remote"
-      id: "amazon/chronos-t5-small"     # HuggingFace ID (if local)
-      endpoint: null                    # URL (if remote)
-      parameters:                       # Model-specific parameters
-        num_samples: 20                 # Number of sample paths for probabilistic forecast
+      id: null                          
+      endpoint: "http://gpu-server/predict" # Full prediction URL
+      parameters:                       
+        num_samples: 20                 
+
         temperature: 1.0                # Sampling temperature
         top_k: 50                       # Top-k sampling
         top_p: 1.0                      # Top-p (nucleus) sampling
 
     # --- Training Configuration (Optional) ---
-    training:
       enabled: true
-      schedule: "0 0 * * *"             # Daily at midnight
-      window: "30d"                     # Training data history
-      parameters:                       # Training-specific parameters
+      schedule: "0 0 * * *"             
+      window: "30d"                     
+      endpoint: "http://gpu-server/train" # Full training URL
+      parameters:                       
         epochs: 10
         batch_size: 32
 

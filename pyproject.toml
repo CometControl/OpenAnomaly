@@ -2,6 +2,9 @@
 requires = ["setuptools>=61.0", "wheel"]
 build-backend = "setuptools.build_meta"
 
+[tool.setuptools]
+packages = ["openanomaly"]
+
 [project]
 name = "openanomaly"
 version = "0.1.0"
@@ -21,13 +24,14 @@ dependencies = [
     "opentelemetry-sdk>=1.22.0",
     "opentelemetry-api>=1.22.0",
     "redis>=5.0.0",
-    "torch>=2.0.0",
-    "transformers>=4.30.0",
-    "accelerate>=0.20.0",
-    "chronos-forecasting @ git+https://github.com/amazon-science/chronos-forecasting.git",
+    "redis>=5.0.0",
 ]
 
 [project.optional-dependencies]
+ml = [
+    "torch>=2.0.0",
+    "chronos-forecasting @ git+https://github.com/amazon-science/chronos-forecasting.git",
+]
 test = [
     "pytest>=8.0.0",
     "pytest-asyncio>=0.23.0",

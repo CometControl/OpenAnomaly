@@ -20,12 +20,13 @@ ENV VIRTUAL_ENV=/app/.venv
 RUN uv venv $VIRTUAL_ENV --python /usr/local/bin/python
 ENV PATH="$VIRTUAL_ENV/bin:$PATH"
 
-# Install dependencies (sync ensures exact versions from lock if available, or resolves pyproject)
-# Using `uv pip install -r pyproject.toml` or `uv sync` depending on preference.
-# Since we are in a docker build, we might not have the full project src yet.
-# Installing dependencies first for caching.
-# Install dependencies into the virtual environment
-RUN uv pip install --python $VIRTUAL_ENV -r pyproject.toml
+# Install dependencies
+ARG INSTALL_ML=false
+RUN if [ "$INSTALL_ML" = "true" ]; then \
+        uv pip install --python $VIRTUAL_ENV -e ".[ml]"; \
+    else \
+        uv pip install --python $VIRTUAL_ENV -e .; \
+    fi
 
 # 2. Runtime Stage: Minimal image
 FROM python:3.14-slim

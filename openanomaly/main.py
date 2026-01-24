@@ -9,16 +9,18 @@ from openanomaly.adapters.tsdb.prometheus import PrometheusAdapter
 from openanomaly.adapters.models.chronos.adapter import ChronosAdapter
 from openanomaly.core.services.inference_loop import InferenceLoop
 from openanomaly.adapters.config.yaml_store import YamlConfigStore
+from openanomaly.adapters.config.settings_loader import load_settings
 
 # Logging
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
-# Configuration
-REDIS_URL = os.getenv("REDIS_URL", "redis://localhost:6379/0")
-VM_URL = os.getenv("VICTORIAMETRICS_URL", "http://localhost:8428")
-# VM write path for prometheus remote write is usually /api/v1/write
-VM_WRITE_URL = os.getenv("VICTORIAMETRICS_WRITE_URL", f"{VM_URL}/api/v1/write")
+# Configuration (Load from YAML with Env Overrides)
+settings = load_settings()
+
+REDIS_URL = settings.redis_url
+VM_URL = settings.victoriametrics_url
+VM_WRITE_URL = settings.get_write_url()
 
 # Celery Application
 celery_app = Celery("openanomaly", broker=REDIS_URL, backend=REDIS_URL)
@@ -30,7 +32,7 @@ app = FastAPI(title="OpenAnomaly")
 def health_check():
     return {"status": "ok", "version": "0.1.0"}
 
-@app.post("/pipelines/{pipeline_name}/trigger")
+@app.post("/pipelines/{pipeline_name}/inference")
 def trigger_inference(pipeline_name: str):
     """
     Manually trigger an inference run for a pipeline.
@@ -48,14 +50,13 @@ def trigger_training(pipeline_name: str):
     task = run_training_task.delay(pipeline_name)
     return {"message": "Training run triggered", "task_id": str(task.id)}
 
-@app.post("/execute/forecast")
-async def execute_forecast(pipeline: Pipeline):
+@app.post("/execute/inference")
+async def execute_inference(pipeline: Pipeline):
     """
-    Run a stateless ad-hoc forecast using the provided pipeline configuration.
-    Returns the forecast result directly without saving context.
+    Run a stateless ad-hoc inference using the provided pipeline configuration.
+    Writes results directly to TSDB.
     """
     # 1. Instantiate Components
-    # TODO: Refactor component instantiation into a reusable factory/dependency injection
     if pipeline.model.type == "remote":
         from openanomaly.adapters.models.remote import RemoteModelAdapter
         if not pipeline.model.endpoint:
@@ -74,22 +75,45 @@ async def execute_forecast(pipeline: Pipeline):
     
     tsdb = PrometheusAdapter(read_url=VM_URL, write_url=VM_WRITE_URL)
     
-    # 2. Run Inference
+    # 2. Run Inference & Write
     service = InferenceLoop(tsdb, model)
-    forecast_df = await service.generate_forecast(pipeline)
+    await service.run_pipeline(pipeline)
     
-    # 3. Serialize Result
-    # Return as JSON records for simplicity/API compatibility
-    if forecast_df.empty:
-        return {"data": []}
+    return {"status": "success", "message": "Inference executed and results written to TSDB"}
+
+@app.post("/execute/train")
+async def execute_training(pipeline: Pipeline):
+    """
+    Run a stateless ad-hoc training using the provided pipeline configuration.
+    Returns the new model ID.
+    """
+    from openanomaly.core.services.training_loop import TrainingLoop
+    
+    # 1. Instantiate Components
+    if pipeline.model.type == "remote":
+        from openanomaly.adapters.models.remote import RemoteModelAdapter
+        if not pipeline.model.endpoint:
+            raise ValueError("Endpoint required for remote model")
         
-    return {
-        "data": forecast_df.to_dict(orient="records"),
-        "meta": {
-            "rows": len(forecast_df),
-            "columns": list(forecast_df.columns)
-        }
-    }
+        training_endpoint = pipeline.training.endpoint if pipeline.training else None
+            
+        model = RemoteModelAdapter(
+            prediction_endpoint=pipeline.model.endpoint,
+            training_endpoint=training_endpoint,
+            serialization_format=pipeline.model.serialization_format,
+            **pipeline.model.parameters
+        )
+    else:
+        # Local models training not fully supported in stateless yet, but we allow it
+        model = ChronosAdapter(model_id=pipeline.model.id)
+            
+    tsdb = PrometheusAdapter(read_url=VM_URL, write_url=VM_WRITE_URL)
+    
+    # 2. Run Training
+    service = TrainingLoop(tsdb, model)
+    new_id = await service.run_training(pipeline)
+    
+    return {"status": "success", "model_id": new_id}
 
 # Celery Tasks
 @celery_app.task(name="openanomaly.tasks.run_inference")
@@ -102,7 +126,7 @@ def run_inference_task(pipeline_name: str):
     async def _execute():
         # 1. Load Pipeline Configuration
         # Assuming pipelines.yaml is in the current working directory
-        config_store = YamlConfigStore(config_path="pipelines.yaml")
+        config_store = YamlConfigStore(config_path=settings.pipelines_file)
         
         # Load pipeline to get model config
         pipeline = await config_store.get_pipeline(pipeline_name)
@@ -154,7 +178,7 @@ def run_training_task(pipeline_name: str):
     
     async def _execute():
         # 1. Load Pipeline Configuration
-        config_store = YamlConfigStore(config_path="pipelines.yaml")
+        config_store = YamlConfigStore(config_path=settings.pipelines_file)
         pipeline = await config_store.get_pipeline(pipeline_name)
         if not pipeline:
             logger.error(f"Pipeline '{pipeline_name}' not found.")

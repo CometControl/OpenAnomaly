@@ -1,0 +1,5 @@
+# System Configuration for OpenAnomaly
+redis_url: "redis://localhost:6379/0"
+victoriametrics_url: "http://localhost:8428"
+# victoriametrics_write_url: "http://localhost:8428/api/v1/write" # Optional override
+pipelines_file: "pipelines.yaml"

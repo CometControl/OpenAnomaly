@@ -56,11 +56,16 @@
     - [x] Update `technical_design.md` with arrow capabilities <!-- id: 53 -->
 
 - [x] **API Triggers** (User Request) <!-- id: 54 -->
-    - [x] `POST /pipelines/{name}/trigger` (Inference) <!-- id: 55 -->
+    - [x] `POST /pipelines/{name}/inference` (Renamed from trigger) <!-- id: 55 -->
     - [x] `POST /pipelines/{name}/train` (Training) <!-- id: 56 -->
-    - [x] `POST /execute/forecast` (Stateless Ad-hoc) <!-- id: 57 -->
-        - [x] Refactor `InferenceLoop` to expose `generate_forecast` <!-- id: 58 -->
-        - [x] Implement `POST /execute/forecast` endpoint <!-- id: 59 -->
+    - [x] `POST /execute/inference` (Stateless Ad-hoc, Writes to TSDB) <!-- id: 57 -->
+    - [x] `POST /execute/train` (Stateless Ad-hoc) <!-- id: 60 -->
+
+- [x] **System Configuration (YAML)** (User Request) <!-- id: 61 -->
+    - [x] Create `SystemSettings` domain model <!-- id: 62 -->
+    - [x] Create `load_settings` adapter (YAML loader) <!-- id: 63 -->
+    - [x] Integrate `load_settings` into `main.py` <!-- id: 64 -->
+    - [x] Create default `config.yaml` <!-- id: 65 -->
 
 - [ ] **Management API (MongoDB + FastAPI)** <!-- id: 3 -->
     - [ ] FastAPI service with JSON Schema validation <!-- id: 28 -->

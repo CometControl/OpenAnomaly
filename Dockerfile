@@ -1,6 +1,6 @@
 # Multi-stage build for OpenAnomaly
 # 1. Builder Stage: Install dependencies with UV
-FROM python:3.11-slim AS builder
+FROM python:3.14-slim AS builder
 
 WORKDIR /app
 
@@ -28,7 +28,7 @@ ENV PATH="$VIRTUAL_ENV/bin:$PATH"
 RUN uv pip install --python $VIRTUAL_ENV -r pyproject.toml
 
 # 2. Runtime Stage: Minimal image
-FROM python:3.11-slim
+FROM python:3.14-slim
 
 WORKDIR /app
 

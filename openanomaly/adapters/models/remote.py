@@ -19,6 +19,7 @@ class RemoteModelAdapter(ModelEngine):
     """
     prediction_endpoint: str
     training_endpoint: str | None = None
+    serialization_format: str = "json"
     timeout: float = 30.0
     headers: dict[str, str] = {}
     
@@ -40,15 +41,34 @@ class RemoteModelAdapter(ModelEngine):
         """Call the remote inference endpoint."""
         client = await self._get_client()
         
-        context_values = df["y"].tolist()
-        
-        payload = request.model_dump(mode="json")
-        payload["context"] = context_values
-        
-        response = await client.post(
-            self.prediction_endpoint,
-            json=payload,
-        )
+        if self.serialization_format == "parquet":
+            # Parquet Serialization
+            import io
+            buffer = io.BytesIO()
+            df.to_parquet(buffer)
+            buffer.seek(0)
+            
+            # For Parquet, we send multipart/form-data or raw bytes with metadata headers
+            # Simplest for hybrid (config + data) is multipart
+            files = {"data": ("data.parquet", buffer, "application/octet-stream")}
+            data_payload = {"request": request.model_dump_json()}
+            
+            response = await client.post(
+                self.prediction_endpoint,
+                data=data_payload,
+                files=files
+            )
+        else:
+            # JSON Serialization (Legacy/Default)
+            context_values = df["y"].tolist()
+            payload = request.model_dump(mode="json")
+            payload["context"] = context_values
+            
+            response = await client.post(
+                self.prediction_endpoint,
+                json=payload,
+            )
+
         response.raise_for_status()
         
         data = response.json()
@@ -91,19 +111,37 @@ class RemoteModelAdapter(ModelEngine):
         import json
         client = await self._get_client()
         
-        # Serialize DataFrame safely
-        data_json = df.to_json(orient="records", date_format="iso")
-        data_list = json.loads(data_json)
-        
-        payload = {
-            "data": data_list,
-            "parameters": parameters
-        }
-        
-        response = await client.post(
-            self.training_endpoint,
-            json=payload,
-        )
+        if self.serialization_format == "parquet":
+            # Parquet Serialization
+            import io
+            buffer = io.BytesIO()
+            df.to_parquet(buffer)
+            buffer.seek(0)
+            
+            files = {"data": ("training_data.parquet", buffer, "application/octet-stream")}
+            data_payload = {"parameters": json.dumps(parameters)}
+            
+            response = await client.post(
+                self.training_endpoint,
+                data=data_payload,
+                files=files,
+            )
+        else:
+            # JSON Serialization
+            # Serialize DataFrame safely
+            data_json = df.to_json(orient="records", date_format="iso")
+            data_list = json.loads(data_json)
+            
+            payload = {
+                "data": data_list,
+                "parameters": parameters
+            }
+            
+            response = await client.post(
+                self.training_endpoint,
+                json=payload,
+            )
+
         response.raise_for_status()
         
         # Expecting {"model_id": "..."} or {"artifact_uri": "..."}

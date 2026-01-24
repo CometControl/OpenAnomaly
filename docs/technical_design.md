@@ -140,6 +140,9 @@ POST http://remote-host/custom/train
 *Configuration*: 
 - Prediction: `model.endpoint` = "http://remote-host/custom/predict"
 - Training: `training.endpoint` = "http://remote-host/custom/train"
+- Format: `model.serialization_format` = "json" | "parquet"
+  - `parquet` uses `multipart/form-data` with `application/octet-stream`.
+
 
 
 ---
@@ -182,6 +185,7 @@ pipelines:
       type: "local"                     # Options: "local", "remote"
       id: null                          
       endpoint: "http://gpu-server/predict" # Full prediction URL
+      serialization_format: "parquet"       # "json" (default) or "parquet"
       parameters:                       
         num_samples: 20                 
 

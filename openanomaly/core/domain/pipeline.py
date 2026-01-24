@@ -22,6 +22,7 @@ class ModelConfig(BaseModel):
     type: Literal["local", "remote"]
     id: str | None = None  # HuggingFace model ID (for local)
     endpoint: str | None = None  # URL (for remote)
+    serialization_format: Literal["json", "parquet"] = "json"  # Data format for remote calls
     parameters: dict = Field(default_factory=dict)
 
 

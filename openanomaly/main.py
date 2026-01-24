@@ -61,6 +61,7 @@ def run_inference_task(pipeline_name: str):
             # Use model.endpoint as prediction_endpoint
             model = RemoteModelAdapter(
                 prediction_endpoint=pipeline.model.endpoint,
+                serialization_format=pipeline.model.serialization_format,
                 **pipeline.model.parameters
             )
         else:
@@ -110,6 +111,7 @@ def run_training_task(pipeline_name: str):
             model = RemoteModelAdapter(
                 prediction_endpoint=pipeline.model.endpoint,
                 training_endpoint=training_endpoint,
+                serialization_format=pipeline.model.serialization_format,
                 **pipeline.model.parameters
             )
         else:

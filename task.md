@@ -67,6 +67,11 @@
     - [x] Integrate `load_settings` into `main.py` <!-- id: 64 -->
     - [x] Create default `config.yaml` <!-- id: 65 -->
 
+- [x] **Verification & Testing** (User Request) <!-- id: 66 -->
+    - [x] Unit Test: `SystemSettings` & `load_settings` <!-- id: 67 -->
+    - [x] API Test: `POST /pipelines/{name}/inference` & `/train` <!-- id: 68 -->
+    - [x] API Test: `POST /execute/inference` & `/train` <!-- id: 69 -->
+
 - [ ] **Management API (MongoDB + FastAPI)** <!-- id: 3 -->
     - [ ] FastAPI service with JSON Schema validation <!-- id: 28 -->
     - [ ] CRUD for pipelines (requires `MongoAdapter`) <!-- id: 29 -->

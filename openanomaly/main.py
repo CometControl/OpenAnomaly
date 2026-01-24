@@ -6,10 +6,11 @@ from fastapi import FastAPI
 from celery import Celery
 
 from openanomaly.adapters.tsdb.prometheus import PrometheusAdapter
-from openanomaly.adapters.models.chronos.adapter import ChronosAdapter
+# from openanomaly.adapters.models.chronos.adapter import ChronosAdapter # Lazy imported
 from openanomaly.core.services.inference_loop import InferenceLoop
 from openanomaly.adapters.config.yaml_store import YamlConfigStore
 from openanomaly.adapters.config.settings_loader import load_settings
+from openanomaly.core.domain.pipeline import Pipeline
 
 # Logging
 logging.basicConfig(level=logging.INFO)
@@ -71,6 +72,7 @@ async def execute_inference(pipeline: Pipeline):
             **pipeline.model.parameters
         )
     else:
+        from openanomaly.adapters.models.chronos.adapter import ChronosAdapter
         model = ChronosAdapter(model_id=pipeline.model.id)
     
     tsdb = PrometheusAdapter(read_url=VM_URL, write_url=VM_WRITE_URL)
@@ -105,6 +107,7 @@ async def execute_training(pipeline: Pipeline):
         )
     else:
         # Local models training not fully supported in stateless yet, but we allow it
+        from openanomaly.adapters.models.chronos.adapter import ChronosAdapter
         model = ChronosAdapter(model_id=pipeline.model.id)
             
     tsdb = PrometheusAdapter(read_url=VM_URL, write_url=VM_WRITE_URL)
@@ -150,6 +153,7 @@ def run_inference_task(pipeline_name: str):
                 **pipeline.model.parameters
             )
         else:
+            from openanomaly.adapters.models.chronos.adapter import ChronosAdapter
             model = ChronosAdapter(model_id=pipeline.model.id)
         
         # TSDB is currently environment-based (shared infra)
@@ -202,6 +206,7 @@ def run_training_task(pipeline_name: str):
         else:
             # Local models (Chronos) generally don't support training via this task yet
             # But we instantiate anyway to allow the adapter to handle it (e.g. log skip)
+            from openanomaly.adapters.models.chronos.adapter import ChronosAdapter
             model = ChronosAdapter(model_id=pipeline.model.id)
             
         tsdb = PrometheusAdapter(read_url=VM_URL, write_url=VM_WRITE_URL)

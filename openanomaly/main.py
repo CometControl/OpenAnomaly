@@ -30,6 +30,67 @@ app = FastAPI(title="OpenAnomaly")
 def health_check():
     return {"status": "ok", "version": "0.1.0"}
 
+@app.post("/pipelines/{pipeline_name}/trigger")
+def trigger_inference(pipeline_name: str):
+    """
+    Manually trigger an inference run for a pipeline.
+    """
+    # Dispatch task asynchronously
+    task = run_inference_task.delay(pipeline_name)
+    return {"message": "Inference run triggered", "task_id": str(task.id)}
+
+@app.post("/pipelines/{pipeline_name}/train")
+def trigger_training(pipeline_name: str):
+    """
+    Manually trigger a training run for a pipeline.
+    """
+    # Dispatch task asynchronously
+    task = run_training_task.delay(pipeline_name)
+    return {"message": "Training run triggered", "task_id": str(task.id)}
+
+@app.post("/execute/forecast")
+async def execute_forecast(pipeline: Pipeline):
+    """
+    Run a stateless ad-hoc forecast using the provided pipeline configuration.
+    Returns the forecast result directly without saving context.
+    """
+    # 1. Instantiate Components
+    # TODO: Refactor component instantiation into a reusable factory/dependency injection
+    if pipeline.model.type == "remote":
+        from openanomaly.adapters.models.remote import RemoteModelAdapter
+        if not pipeline.model.endpoint:
+            raise ValueError("Endpoint required for remote model")
+        
+        training_endpoint = pipeline.training.endpoint if pipeline.training else None
+        
+        model = RemoteModelAdapter(
+            prediction_endpoint=pipeline.model.endpoint,
+            training_endpoint=training_endpoint,
+            serialization_format=pipeline.model.serialization_format,
+            **pipeline.model.parameters
+        )
+    else:
+        model = ChronosAdapter(model_id=pipeline.model.id)
+    
+    tsdb = PrometheusAdapter(read_url=VM_URL, write_url=VM_WRITE_URL)
+    
+    # 2. Run Inference
+    service = InferenceLoop(tsdb, model)
+    forecast_df = await service.generate_forecast(pipeline)
+    
+    # 3. Serialize Result
+    # Return as JSON records for simplicity/API compatibility
+    if forecast_df.empty:
+        return {"data": []}
+        
+    return {
+        "data": forecast_df.to_dict(orient="records"),
+        "meta": {
+            "rows": len(forecast_df),
+            "columns": list(forecast_df.columns)
+        }
+    }
+
 # Celery Tasks
 @celery_app.task(name="openanomaly.tasks.run_inference")
 def run_inference_task(pipeline_name: str):

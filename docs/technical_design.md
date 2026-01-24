@@ -122,7 +122,21 @@ For models running on external infrastructure (e.g., dedicated GPU server, cloud
 
 **Interface Contract (HTTP/gRPC):**
 ```json
+```json
+POST /execute/forecast (Stateless)
+{
+  ...Pipeline Configuration Object...
+}
+Response:
+{
+  "data": [{"ds": "2024...", "unique_id": "...", "mean": 1.2, ...}, ...],
+  "meta": {"rows": 12, "columns": ["ds", "unique_id", "mean", ...]}
+}
+```
+
+```json
 POST http://remote-host/custom/predict
+
 {
   "context": [1.2, 3.4, ...],
   "prediction_length": 12,

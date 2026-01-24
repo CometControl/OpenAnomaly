@@ -43,17 +43,25 @@ class InferenceLoop:
         
     async def run_pipeline(self, pipeline: Pipeline, now: datetime | None = None) -> None:
         """
-        Execute the pipeline logic.
+        Execute the pipeline logic (Fetch -> Predict -> Write).
+        """
+        # 1. Generate Forecast
+        forecast_df = await self.generate_forecast(pipeline, now)
         
-        Args:
-            pipeline: Pipeline configuration
-            now: Current timestamp (default: utcnow)
+        if forecast_df.empty:
+            return
+            
+        # 2. Write Results
+        await self.write_results(pipeline, forecast_df)
+
+    async def generate_forecast(self, pipeline: Pipeline, now: datetime | None = None) -> pd.DataFrame:
+        """
+        Fetch data and run inference without writing results.
+        Returns the forecast DataFrame.
         """
         now = now or datetime.utcnow()
         
         # 1. Calculate Time Windows
-        # Parse context_window (e.g. "1h") - simplistic parsing for MVP
-        # In prod use a proper duration parser
         window_seconds = self._parse_duration(pipeline.context_window)
         start_time = now - timedelta(seconds=window_seconds)
         
@@ -68,45 +76,36 @@ class InferenceLoop:
         
         if context_df.empty:
             logger.warning(f"No data found for pipeline '{pipeline.name}'")
-            return
+            return pd.DataFrame()
             
         # 3. Prepare Forecast Request
-        # Parse prediction horizon
         horizon_seconds = self._parse_duration(pipeline.prediction_horizon)
-        # Calculate horizon steps based on step size (simplistic)
         step_seconds = self._parse_duration(pipeline.step)
         prediction_length = int(horizon_seconds / step_seconds)
         
         req = ForecastRequest(
             prediction_length=prediction_length,
-            quantiles=[0.1, 0.5, 0.9, 0.95, 0.99], # Default set or from config
+            quantiles=[0.1, 0.5, 0.9, 0.95, 0.99], 
             parameters=pipeline.model.parameters,
         )
         
-        # 4. Run Inference (Zero-Shot)
-        # Note: If DF has multiple series (unique_ids), ModelEngine should handle it 
-        # or we loop here. Our ModelEngine definition supports DF with multiple unique_ids
-        # natively if batched, but ChronosAdapter example handled one. 
-        # Let's assume Adapter handles the DF.
+        # 4. Run Inference
         logger.info(f"Running inference for '{pipeline.name}' with model '{pipeline.model.id}'")
         forecast_df = await self.engine.predict(context_df, req)
         
         if forecast_df.empty:
             logger.warning("Model returned no forecast")
-            return
+            return pd.DataFrame()
             
-        # 5. Score Anomalies (Optional / Future Phase logic)
-        # basic z-score or IQR based on quantiles
-        # For now, we write the forecast mean and bounds.
-        
-        # 6. Write Results
-        # Remote Write expects "unique_id", "ds", "y"
-        # We rename columns to write back metrics
-        
+        return forecast_df
+
+    async def write_results(self, pipeline: Pipeline, forecast_df: pd.DataFrame) -> None:
+        """
+        Write forecast results to TSDB.
+        """
         output_metrics = []
         
         # Extract source metric name from query (sanitize for labels)
-        # e.g., "ds_0_T{source=\"boom\"}" -> "ds_0_T"
         source_metric = pipeline.query.split("{")[0].strip()
         
         for _, row in forecast_df.iterrows():

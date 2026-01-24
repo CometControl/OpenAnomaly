@@ -55,6 +55,13 @@
     - [x] Update `RemoteModelAdapter` to handle arrow (Feather) serialization <!-- id: 52 -->
     - [x] Update `technical_design.md` with arrow capabilities <!-- id: 53 -->
 
+- [x] **API Triggers** (User Request) <!-- id: 54 -->
+    - [x] `POST /pipelines/{name}/trigger` (Inference) <!-- id: 55 -->
+    - [x] `POST /pipelines/{name}/train` (Training) <!-- id: 56 -->
+    - [x] `POST /execute/forecast` (Stateless Ad-hoc) <!-- id: 57 -->
+        - [x] Refactor `InferenceLoop` to expose `generate_forecast` <!-- id: 58 -->
+        - [x] Implement `POST /execute/forecast` endpoint <!-- id: 59 -->
+
 - [ ] **Management API (MongoDB + FastAPI)** <!-- id: 3 -->
     - [ ] FastAPI service with JSON Schema validation <!-- id: 28 -->
     - [ ] CRUD for pipelines (requires `MongoAdapter`) <!-- id: 29 -->

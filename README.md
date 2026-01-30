@@ -50,30 +50,34 @@ Write Results (Remote Write)
 uv sync
 ```
 
-### 2. Configure (`config/pipelines.yaml`)
+### 2. Configure (`config.yaml`)
 ```yaml
-pipelines:
-  - name: "cpu_anomaly"
-    query: 'avg(rate(node_cpu_seconds_total{mode="idle"}[5m])) by (instance)'
-    context_window: "1h"
-    prediction_horizon: "15m"
-    mode: "forecast_and_anomaly"
-    forecast_schedule: "*/5 * * * *"
-    model:
-      type: "remote"
-      endpoint: "http://gpu-server:8000/predict"
-    anomaly:
-      technique: "confidence_interval"
-      confidence_level: 0.95
+# Infrastructure
+prometheus_url: "http://localhost:8428"
+# ...
+```
+
+### 3. Bootstrap (Light Mode / SQLite)
+To run without MongoDB/Redis, use SQLite and seed the database from your YAML:
+```bash
+# Set DB to SQLite
+export OPENANOMALY_DATABASE_TYPE="sqlite"
+export CELERY_BROKER_URL="sqla+sqlite:///celery.db"
+
+# Create DB Schema
+python manage.py migrate
+
+# Seed pipelines from YAML
+python manage.py seed_pipelines
 ```
 
 ### 3. Run
 ```bash
 # Set broker (SQLite for standalone)
-export OA_CELERY_BROKER="sqla+sqlite:///celery.db"
+export CELERY_BROKER_URL="sqla+sqlite:///celery.db"
 
-# Run worker with beat
-celery -A openanomaly.worker worker -B -l info
+# Run worker with beat (using the new Django app)
+celery -A openanomaly.config worker -B -l info
 ```
 
 ---

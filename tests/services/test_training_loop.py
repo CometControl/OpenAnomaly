@@ -7,8 +7,8 @@ import pandas as pd
 from unittest.mock import AsyncMock, MagicMock
 from datetime import timedelta
 
-from openanomaly.core.services.training_loop import TrainingLoop
-from openanomaly.core.domain.pipeline import Pipeline, TrainingConfig, ModelConfig
+from openanomaly.pipelines.training import TrainingLoop
+from openanomaly.pipelines.models import Pipeline
 
 @pytest.fixture
 def mock_tsdb():

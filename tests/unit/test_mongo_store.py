@@ -1,7 +1,7 @@
 import pytest
 from unittest.mock import MagicMock, AsyncMock, patch
-from openanomaly.core.domain.settings import SystemSettings
-from openanomaly.core.domain.pipeline import Pipeline
+from openanomaly.config.settings import SystemSettings
+from openanomaly.pipelines.models import Pipeline
 # We can't import MongoConfigStore if motor is not installed and we are in strict env
 # so we mock sys.modules or rely on the code structure.
 # But for unit test, let's assume we can patch it.
@@ -12,7 +12,7 @@ sys.modules["motor"] = MagicMock()
 sys.modules["motor.motor_asyncio"] = MagicMock()
 
 # Now we can import (or import inside test)
-from openanomaly.adapters.config.mongo_store import MongoConfigStore
+from openanomaly.config.mongo_store import MongoConfigStore
 
 @pytest.fixture
 def mock_settings():
@@ -24,7 +24,7 @@ def mock_settings():
 
 @pytest.fixture
 def mock_mongo_client():
-    with patch("openanomaly.adapters.config.mongo_store.AsyncIOMotorClient") as client_cls:
+    with patch("openanomaly.config.mongo_store.AsyncIOMotorClient") as client_cls:
         client = client_cls.return_value
         db = client.__getitem__.return_value # client["db"]
         collection = db.__getitem__.return_value # db["collection"]

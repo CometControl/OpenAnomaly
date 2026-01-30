@@ -30,7 +30,7 @@ def mock_inference_loop():
 
 @pytest.fixture
 def mock_training_loop():
-    with patch("openanomaly.core.services.training_loop.TrainingLoop") as loop_mock:
+    with patch("openanomaly.pipelines.training.TrainingLoop") as loop_mock:
         instance = loop_mock.return_value
         instance.run_training = AsyncMock(return_value="new-model-id")
         yield loop_mock
@@ -75,7 +75,7 @@ def test_execute_inference_endpoint(mock_inference_loop):
     # Since endpoint is async, TestClient handles async loop
     
     with patch("openanomaly.main.PrometheusAdapter"), \
-         patch("openanomaly.adapters.models.chronos.adapter.ChronosAdapter"): # source patch because lazy import
+         patch("openanomaly.common.adapters.models.chronos.adapter.ChronosAdapter"): # source patch because lazy import
          
         response = client.post("/execute/inference", json=payload)
         

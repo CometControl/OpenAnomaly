@@ -1,6 +1,6 @@
 import os
 import pytest
-from openanomaly.core.domain.settings import SystemSettings
+from openanomaly.adapters.config.settings import SystemSettings
 from openanomaly.adapters.config.settings_loader import load_settings
 
 def test_system_settings_defaults():

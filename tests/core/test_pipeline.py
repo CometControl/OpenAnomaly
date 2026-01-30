@@ -2,7 +2,7 @@
 Tests for Core Domain Models (Pipeline).
 """
 import pytest
-from openanomaly.core.domain.pipeline import Pipeline, ModelConfig, OutputConfig
+from openanomaly.pipelines.models import Pipeline
 
 def test_pipeline_defaults():
     """Test standard pipeline defaults."""

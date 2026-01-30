@@ -1,63 +1,59 @@
+version: '3.8'
+
 services:
-  mongo:
-    image: mongo:latest
-    container_name: openanomaly-mongo
-    ports:
-      - "27017:27017"
-    volumes:
-      - mongo-data:/data/db
-
-  victoriametrics:
-    image: victoriametrics/victoria-metrics:latest
-    container_name: openanomaly-vm
-    ports:
-      - "8428:8428"
-    volumes:
-      - vm-data:/victoria-metrics-data
-    command:
-      - "-storageDataPath=/victoria-metrics-data"
-      - "-retentionPeriod=1y"
-
-  redis:
-    image: redis:alpine
-    container_name: openanomaly-redis
-    ports:
-      - "6379:6379"
-
-  app:
+  # 1. API Service (Django with runserver for local dev)
+  api:
     build: .
-    container_name: openanomaly-api
+    command: >
+      sh -c "uv sync &&
+             uv run python manage.py migrate &&
+             uv run python manage.py seed_pipelines &&
+             uv run python manage.py collectstatic --noinput &&
+             uv run python manage.py runserver 0.0.0.0:8000"
     ports:
       - "8000:8000"
     environment:
-      - MONGODB_URI=mongodb://mongo:27017
-      - REDIS_URL=redis://redis:6379/0
-      - VICTORIAMETRICS_URL=http://victoriametrics:8428
+      - OPENANOMALY_DATABASE_TYPE=mongodb
+      - OPENANOMALY_MONGO_URL=mongodb://mongo:27017
+      - OPENANOMALY_REDIS_URL=redis://redis:6379/0
+      - OPENANOMALY_DEBUG=True
     depends_on:
       - mongo
       - redis
-      - victoriametrics
     volumes:
       - .:/app
-      - /app/.venv
-    command: uvicorn main:app --host 0.0.0.0 --port 8000 --reload
 
+  # 2. Worker Service (Celery Worker)
   worker:
     build: .
-    container_name: openanomaly-worker
+    command: sh -c "uv sync && uv run celery -A openanomaly.config.celery worker --loglevel=info"
     environment:
-      - MONGODB_URI=mongodb://mongo:27017
-      - REDIS_URL=redis://redis:6379/0
-      - VICTORIAMETRICS_URL=http://victoriametrics:8428
+      - OPENANOMALY_DATABASE_TYPE=sqlite
+      - OPENANOMALY_REDIS_URL=redis://redis:6379/0
     depends_on:
-      - mongo
       - redis
-      - victoriametrics
     volumes:
       - .:/app
-      - /app/.venv
-    command: celery -A openanomaly.main:celery_app worker --loglevel=info
 
-volumes:
-  mongo-data:
-  vm-data:
+  # 3. Beat Service (Celery Beat Scheduler)
+  beat:
+    build: .
+    command: sh -c "uv sync && uv run celery -A openanomaly.config.celery beat --loglevel=info"
+    environment:
+      - OPENANOMALY_DATABASE_TYPE=sqlite
+      - OPENANOMALY_REDIS_URL=redis://redis:6379/0
+    depends_on:
+      - redis
+    volumes:
+      - .:/app
+
+  # Infrastructure
+  mongo:
+    image: mongo:7.0
+    ports:
+      - "27017:27017"
+
+  redis:
+    image: redis:7.0
+    ports:
+      - "6379:6379"

@@ -6,10 +6,10 @@ import pandas as pd
 import numpy as np
 from unittest.mock import MagicMock, AsyncMock
 
-from openanomaly.core.services.inference_loop import InferenceLoop
-from openanomaly.core.ports.tsdb_client import TSDBClient
-from openanomaly.core.ports.model_engine import ModelEngine
-from openanomaly.core.domain.pipeline import Pipeline, ModelConfig
+from openanomaly.pipelines.inference import InferenceLoop
+from openanomaly.common.interfaces.tsdb_client import TSDBClient
+from openanomaly.common.interfaces.model_engine import ModelEngine
+from openanomaly.pipelines.models import Pipeline
 
 @pytest.fixture
 def mock_tsdb():

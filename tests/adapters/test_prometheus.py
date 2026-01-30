@@ -4,12 +4,12 @@ Tests for PrometheusAdapter.
 import pytest
 import pandas as pd
 from unittest.mock import MagicMock, patch, AsyncMock
-from openanomaly.adapters.tsdb.prometheus import PrometheusAdapter
+from openanomaly.common.adapters.tsdb.prometheus import PrometheusAdapter
 
 @pytest.fixture
 def mock_exporter():
     """Mock the OpenTelemetry exporter."""
-    with patch("openanomaly.adapters.tsdb.prometheus.PrometheusRemoteWriteMetricsExporter") as MockExporter:
+    with patch("openanomaly.common.adapters.tsdb.prometheus.PrometheusRemoteWriteMetricsExporter") as MockExporter:
         # Mock instance
         instance = MockExporter.return_value
         instance.export.return_value = None # Success
@@ -44,7 +44,7 @@ async def test_write_conversion(adapter, mock_exporter):
 @pytest.mark.asyncio
 async def test_query_range_mock(adapter):
     """Test query logic (mocking the HTTP client)."""
-    with patch("openanomaly.adapters.tsdb.prometheus.httpx.AsyncClient") as MockClient:
+    with patch("openanomaly.common.adapters.tsdb.prometheus.httpx.AsyncClient") as MockClient:
         # The adapter creates an instance: client = httpx.AsyncClient(...)
         client_instance = MockClient.return_value
         

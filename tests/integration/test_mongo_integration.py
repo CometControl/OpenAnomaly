@@ -1,8 +1,8 @@
 import pytest
 import os
-from openanomaly.core.domain.settings import SystemSettings
-from openanomaly.core.domain.pipeline import Pipeline
-from openanomaly.adapters.config.mongo_store import MongoConfigStore
+from openanomaly.config.settings import SystemSettings
+from openanomaly.pipelines.models import Pipeline
+from openanomaly.config.mongo_store import MongoConfigStore
 
 # Integration tests usually require custom markers or env vars to run
 # We check if we can connect; if not, we skip.

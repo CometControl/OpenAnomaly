@@ -88,12 +88,15 @@ OpenAnomaly operates in a continuous loop, similar to VMAnomaly:
 | Port | Responsibility | Adapters |
 | :--- | :--- | :--- |
 | **`TSDBClient`** | Read (Query) and Write (Remote Write) to TSDB | `PrometheusAdapter` |
-| **`ModelEngine`** | Run zero-shot forecast inference | Local or Remote adapters (see Section 4) |
-| **`ConfigStore`** | Persist pipeline definitions | `YamlAdapter` (File), `MongoAdapter` (DB) |
-| **`Scheduler`** | Trigger inference jobs on a schedule | `CeleryBeatAdapter` |
+| **`ModelEngine`** | Run zero-shot forecast inference | Local or Remote adapters |
+| **`ConfigStore`** | Persist pipeline definitions | `DjangoConfigStore` (ORM-based) |
+| **`Scheduler`** | Trigger inference jobs on a schedule | `DjangoSchedulerAdapter` (Syncs to Redbeat) |
 
-### Removed Ports (vs. Previous Design)
-*   ~~`ArtifactStore`~~: No model weights to store (for pre-trained TSFMs). For trainable models, weights are managed by the Model Engine (Remote or Local).
+### Independent Tasks
+The scheduler triggers three distinct tasks:
+1.  **Forecast**: Runs the inference loop (Fetch -> Predict -> Write).
+2.  **Anomaly**: Checks for anomalies (Actuals vs Forecast).
+3.  **Train**: Retrains the model (if applicable).
 
 
 ---
@@ -251,7 +254,8 @@ pipelines:
 | **Language** | Python | Standard for ML/DS. |
 | **Model Engine** | Per-model dedicated libraries | Each TSFM has its own library and API. |
 | **TSDB Interface** | Prometheus API | Universal compatibility. |
-| **Scheduler** | Celery Beat | Distributed scheduling with persistence. |
+| **Persistence** | **Django + Mongo/SQLite** | Supports MongoDB (Prod) or SQLite (Light Mode). |
+| **Scheduler** | **Celery + Redbeat** | Distributed scheduling (requires Redis) or Standalone. |
 | **API** | FastAPI + JSON Schema | OpenAPI spec with schema validation for integration. |
 | **UI** | Streamlit | For optional playground/visualization. |
 
@@ -260,43 +264,36 @@ pipelines:
 ## 7. Project Structure
 
 ```text
+
 openanomaly/
-├── core/
-│   ├── ports/
-│   │   ├── tsdb_client.py      # Interface for Prometheus Read/Write
-│   │   ├── model_engine.py     # Interface for TSFM inference (local or remote)
-│   │   ├── config_store.py     # Interface for loading pipelines
-│   │   └── scheduler.py        # Interface for Celery Beat
-│   ├── domain/
-│   │   ├── pipeline.py         # Pipeline dataclass (matches JSON Schema)
-│   │   └── result.py           # ForecastResult, AnomalyResult
-│   └── services/
-│       └── inference_loop.py   # Core business logic (the loop)
-│
-├── adapters/
-│   ├── models/
-│   │   ├── base.py             # Abstract base for all model adapters
-│   │   ├── remote.py           # RemoteModelAdapter (HTTP client)
-│   │   ├── chronos/            # ChronosAdapter (local, dedicated lib)
-│   │   └── timesfm/            # TimesFMAdapter (local, dedicated lib)
-│   ├── tsdb/
-│   │   └── prometheus.py       # PrometheusAdapter (Query + Remote Write)
+├── common/                     # Shared components
 │   ├── config/
-│   │   ├── yaml_store.py
-│   │   └── mongo_store.py
-│   └── schedulers/
-│       └── celery_beat.py      # CeleryBeatAdapter
+│   │   └── django_store.py     # Database-agnostic ConfigStore using Django ORM
+│   ├── adapters/
+│   │   ├── models/             # Model Engine Adapters (Chronos, Remote)
+│   │   ├── schedulers/         # Scheduler Adapters (Django, Celery Beat)
+│   │   └── tsdb/               # TSDB Clients (Prometheus)
+│   ├── interfaces/             # Core Interfaces (Ports)
+│   └── dataclasses.py          # Shared Data Models
 │
-├── api/                        # FastAPI with JSON Schema
-│   ├── main.py
-│   └── schemas/                # Pydantic models (auto-generate JSON Schema)
-│       └── pipeline.py
+├── config/                     # Configuration & Settings
+│   ├── settings.py             # Django Settings (django-environ)
+│   ├── urls.py                 # Root URLConf
+│   ├── celery.py               # Celery App Entrypoint
+│   ├── wsgi.py                 # WSGI Entry Point
+│   └── asgi.py                 # ASGI Entry Point
 │
-├── schemas/                    # JSON Schema definitions (for external use)
-│   └── pipeline.schema.json
+├── pipelines/                  # Core Domain App (Django App)
+│   ├── models.py               # Pipeline Model (MongoDB)
+│   ├── views.py                # HTTP Entry Points (Trigger/Execute)
+│   ├── tasks.py                # Celery Tasks (Forecast, Anomaly, Train)
+│   ├── signals.py              # Scheduler Logic (Sync to Redbeat)
+│   ├── inference.py            # Business Logic (Fetch->Predict->Write)
+│   └── urls.py                 # App URLs
 │
-└── cli/                        # Main entrypoint
-    └── main.py                 # `python -m openanomaly`
+├── manage.py                   # Django CLI
+├── config.yaml.example         # Example Config
+└── scripts/                    # Utilities
 ```
 
 ---

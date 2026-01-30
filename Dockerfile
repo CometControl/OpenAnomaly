@@ -11,8 +11,12 @@ WORKDIR /app
 RUN pip install uv
 
 # Copy dependency files
-# Copy dependency files
 COPY pyproject.toml uv.lock ./
+
+# Copy source code (needed for local package install)
+COPY openanomaly ./openanomaly
+COPY tests ./tests
+COPY manage.py ./
 
 # Install dependencies (sync utilizes the lockfile for deterministic builds)
 # We use --frozen to ensure we don't modify the lockfile during build
@@ -27,6 +31,9 @@ RUN if [ "$INSTALL_ML" = "true" ]; then \
 FROM python:3.14-slim
 
 WORKDIR /app
+
+# Install uv (needed for local dev with uv sync)
+RUN pip install uv
 
 # Install runtime dependencies (e.g. libgomp for some ML libraries if needed)
 # RUN apt-get update && apt-get install -y libgomp1 && rm -rf /var/lib/apt/lists/*

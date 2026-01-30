@@ -1,0 +1,17 @@
+# OpenAnomaly Configuration Example
+# This file can be mounted as a ConfigMap in Kubernetes
+# Set OPENANOMALY_CONFIG_FILE=/path/to/config.yaml to use it.
+
+# Infrastructure
+redis_url: "redis://redis:6379/0"
+prometheus_url: "http://prometheus:9090"
+prometheus_write_url: "http://victoria-metrics:8428/api/v1/write"
+
+# Database
+mongo_url: "mongodb://mongo:27017"
+mongo_db_name: "openanomaly_prod"
+
+# Application Settings
+debug: false
+secret_key: "change-me-in-production"
+config_store_type: "mongo"

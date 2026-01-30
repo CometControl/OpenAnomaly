@@ -1,48 +1,9 @@
 pipelines:
-  # Infrastructure gauge - ds_10_T
-  - name: boom_ds_10_T
-    query: boom{series="ds_10_T"}
-    step: 1m
-    context_window: 1h
-    prediction_horizon: 15m
+  - name: "test_pipeline_seed"
+    description: "Seeded pipeline"
+    enabled: true
+    query: "up"
+    mode: "forecast_only"
+    forecast_schedule: "*/10 * * * *"
     model:
-      type: local
-      id: autogluon/chronos-2-small
-    output:
-      metric_prefix: openanomaly_
-
-  # Database gauge - ds_100_T
-  - name: boom_ds_100_T
-    query: boom{series="ds_100_T"}
-    step: 1m
-    context_window: 1h
-    prediction_horizon: 15m
-    model:
-      type: local
-      id: autogluon/chronos-2-small
-    output:
-      metric_prefix: openanomaly_
-
-  # Application rate - ds_1000_5T (5-min frequency)
-  - name: boom_ds_1000_5T
-    query: boom{series="ds_1000_5T"}
-    step: 5m
-    context_window: 2h
-    prediction_horizon: 30m
-    model:
-      type: local
-      id: autogluon/chronos-2-small
-    output:
-      metric_prefix: openanomaly_
-
-  # High-frequency 10S data - ds_1003_10S
-  - name: boom_ds_1003_10S
-    query: boom{series="ds_1003_10S"}
-    step: 10s
-    context_window: 10m
-    prediction_horizon: 2m
-    model:
-      type: local
-      id: autogluon/chronos-2-small
-    output:
-      metric_prefix: openanomaly_
+      type: "local"

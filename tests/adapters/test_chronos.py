@@ -5,13 +5,13 @@ import pytest
 import pandas as pd
 import numpy as np
 from unittest.mock import MagicMock, patch
-from openanomaly.adapters.models.chronos.adapter import ChronosAdapter
-from openanomaly.core.ports.model_engine import ForecastRequest
+from openanomaly.common.adapters.models.chronos.adapter import ChronosAdapter
+from openanomaly.common.dataclasses import ForecastRequest
 
 @pytest.fixture
 def mock_pipeline():
     """Mock the Chronos2Pipeline."""
-    with patch("openanomaly.adapters.models.chronos.adapter.Chronos2Pipeline") as MockPipeline:
+    with patch("openanomaly.common.adapters.models.chronos.adapter.Chronos2Pipeline") as MockPipeline:
         # Setup the mock instance
         pipeline_instance = MockPipeline.from_pretrained.return_value
         

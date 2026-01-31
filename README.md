@@ -4,7 +4,7 @@
 
 ![Python 3.11+](https://img.shields.io/badge/python-3.11+-blue.svg)
 ![UV](https://img.shields.io/badge/managed%20by-uv-purple)
-![License](https://img.shields.io/badge/License-MIT-green.svg)
+![License](https://img.shields.io/badge/License-Apache%202.0-blue.svg)
 
 ## Vision
 
@@ -32,15 +32,15 @@ OpenAnomaly follows a **Hexagonal Architecture** (Ports & Adapters) to decouple 
 ```mermaid
 graph TD
     subgraph "Infrastructure"
-        Prometheus[(Prometheus/VM)]
-        Redis[(Redis)]
-        Mongo[(MongoDB)]
+        Prometheus[("Prometheus/VM")]
+        Redis[("Redis")]
+        Mongo[("MongoDB")]
     end
 
     subgraph "OpenAnomaly Cluster"
-        Scheduler[Celery Beat (RedBeat)]
-        Worker[Celery Worker]
-        API[Django API]
+        Scheduler["Celery Beat (RedBeat)"]
+        Worker["Celery Worker"]
+        API["Django API"]
     end
 
     Scheduler --"Triggers Tasks"--> Redis
@@ -95,7 +95,9 @@ docker compose up -d --scale beat=2
 
 ### 4. Access
 *   **Admin Panel**: [http://localhost:8000/admin/](http://localhost:8000/admin/) (Default: `admin` / `admin`)
-*   **API Docs**: [http://localhost:8000/api/docs](http://localhost:8000/api/docs)
+*   **API Docs (Swagger)**: [http://localhost:8000/api/docs/](http://localhost:8000/api/docs/)
+*   **API Schema (OpenAPI)**: [http://localhost:8000/api/schema/](http://localhost:8000/api/schema/)
+*   **Health Check**: [http://localhost:8000/health](http://localhost:8000/health)
 
 ---
 
@@ -137,4 +139,4 @@ To verify the High Availability Scheduler:
 *   **Broker**: Redis is required for Celery and RedBeat.
 
 ## License
-[MIT](LICENSE)
+[Apache 2.0](LICENSE)

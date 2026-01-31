@@ -125,3 +125,37 @@ def run_training_task(pipeline_name: str):
     except Exception as e:
         logger.error(f"Training failed: {e}")
         raise e
+
+@shared_task(name="openanomaly.tasks.simulate_work")
+def simulate_work(task_id: int):
+    """
+    Simulate a long running task to test worker scalibility.
+    """
+    import time
+    import socket
+    import random
+    duration = random.randint(3, 8)
+    worker_name = socket.gethostname()
+    logger.info(f"[Task {task_id}] Started on {worker_name}. Sleeping for {duration}s...")
+    time.sleep(duration)
+    logger.info(f"[Task {task_id}] Finished on {worker_name}.")
+    return {"task_id": task_id, "worker": worker_name, "duration": duration}
+
+@shared_task(name="openanomaly.tasks.heartbeat")
+def heartbeat_task(timestamp: float):
+    """
+    Simple task to test scheduler HA.
+    Increments a counter in Redis to verify unique execution.
+    """
+    import redis
+    import os
+    
+    # Simple redis connection (or use settings)
+    redis_url = os.environ.get('CELERY_BROKER_URL', 'redis://redis:6379/0')
+    # If connection fails, task fails, which is fine for testing
+    r = redis.from_url(redis_url)
+    
+    # Increment counter
+    count = r.incr("scheduler:heartbeat:count")
+    logger.info(f"Heartbeat {timestamp} processed. Count: {count}")
+    return count

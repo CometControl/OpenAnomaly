@@ -1,5 +1,4 @@
 
-from django.contrib import admin
 from django.urls import path, include
 from openanomaly.common import health
 
@@ -15,4 +14,5 @@ urlpatterns = [
 
 from django.conf import settings
 if 'django.contrib.admin' in settings.INSTALLED_APPS:
+    from django.contrib import admin
     urlpatterns.insert(0, path('admin/', admin.site.urls))

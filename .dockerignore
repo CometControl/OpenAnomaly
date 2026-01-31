@@ -15,5 +15,7 @@ htmlcov
 .tox
 *.log
 .env
+.venv
+.uv
 .vscode
 .idea

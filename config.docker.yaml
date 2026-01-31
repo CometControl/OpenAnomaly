@@ -1,16 +1,16 @@
 django:
-  debug: false
+  debug: true
   secret_key: "change-me-in-production"
   allowed_hosts: 
     - "*"
   database_type: "mongodb"
 
 mongo:
-  url: "mongodb://localhost:27017"
+  url: "mongodb://mongo:27017" # Service name 'mongo'
   db_name: "openanomaly"
 
 redis:
-  url: "redis://redis:6379/0"
+  url: "redis://redis:6379/0" # Service name 'redis'
 
 prometheus:
   url: "http://victoriametrics:8428"

@@ -6,46 +6,44 @@ services:
     build: .
     command: >
       sh -c "uv sync &&
-             uv run python manage.py migrate &&
              uv run python manage.py seed_pipelines &&
              uv run python manage.py collectstatic --noinput &&
              uv run python manage.py runserver 0.0.0.0:8000"
     ports:
       - "8000:8000"
     environment:
-      - OPENANOMALY_DATABASE_TYPE=mongodb
-      - OPENANOMALY_MONGO_URL=mongodb://mongo:27017
-      - OPENANOMALY_REDIS_URL=redis://redis:6379/0
-      - OPENANOMALY_DEBUG=True
+      - OPENANOMALY_CONFIG_FILE=config.docker.yaml
     depends_on:
       - mongo
       - redis
     volumes:
       - .:/app
+      - /app/.venv
 
   # 2. Worker Service (Celery Worker)
   worker:
     build: .
     command: sh -c "uv sync && uv run celery -A openanomaly.config.celery worker --loglevel=info"
     environment:
-      - OPENANOMALY_DATABASE_TYPE=sqlite
-      - OPENANOMALY_REDIS_URL=redis://redis:6379/0
+      - OPENANOMALY_CONFIG_FILE=config.docker.yaml
     depends_on:
       - redis
     volumes:
       - .:/app
+      - /app/.venv
 
   # 3. Beat Service (Celery Beat Scheduler)
   beat:
     build: .
-    command: sh -c "uv sync && uv run celery -A openanomaly.config.celery beat --loglevel=info"
+    command: sh -c "uv sync && uv run celery -A openanomaly.config.celery beat --loglevel=info -S redbeat.RedBeatScheduler"
     environment:
-      - OPENANOMALY_DATABASE_TYPE=sqlite
-      - OPENANOMALY_REDIS_URL=redis://redis:6379/0
+      - OPENANOMALY_CONFIG_FILE=config.docker.yaml
+    restart: unless-stopped
     depends_on:
       - redis
     volumes:
       - .:/app
+      - /app/.venv
 
   # Infrastructure
   mongo:
@@ -57,3 +55,5 @@ services:
     image: redis:7.0
     ports:
       - "6379:6379"
+
+

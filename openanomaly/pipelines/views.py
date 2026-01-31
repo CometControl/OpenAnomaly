@@ -31,18 +31,19 @@ class PipelineViewSet(viewsets.ModelViewSet):
     Provides:
     - GET /pipelines/ - List all pipelines
     - POST /pipelines/ - Create new pipeline
-    - GET /pipelines/{id}/ - Get pipeline details
-    - PUT /pipelines/{id}/ - Update pipeline (full)
-    - PATCH /pipelines/{id}/ - Update pipeline (partial)
-    - DELETE /pipelines/{id}/ - Delete pipeline
+    - GET /pipelines/{name}/ - Get pipeline by name
+    - PUT /pipelines/{name}/ - Update pipeline (full)
+    - PATCH /pipelines/{name}/ - Update pipeline (partial)
+    - DELETE /pipelines/{name}/ - Delete pipeline
     
     Custom actions:
-    - POST /pipelines/{id}/trigger_forecast/ - Trigger forecast task
-    - POST /pipelines/{id}/trigger_anomaly/ - Trigger anomaly detection task
-    - POST /pipelines/{id}/trigger_training/ - Trigger training task
+    - POST /pipelines/{name}/trigger_forecast/ - Trigger forecast task
+    - POST /pipelines/{name}/trigger_anomaly/ - Trigger anomaly detection task
+    - POST /pipelines/{name}/trigger_training/ - Trigger training task
     """
     queryset = Pipeline.objects.all()
     serializer_class = PipelineSerializer
+    lookup_field = 'name'  # Use name instead of id for lookups
     
     @extend_schema(
         summary="Trigger forecast for this pipeline",

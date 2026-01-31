@@ -64,6 +64,7 @@ staticfiles/
 config.yaml
 test_output.txt
 test_result.txt
+data/
 
 # Flask stuff:
 instance/

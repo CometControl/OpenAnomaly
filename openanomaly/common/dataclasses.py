@@ -107,6 +107,14 @@ class TrainingConfig:
     window: str = "30d"  # Lookback window for training data
     endpoint: str | None = None
     parameters: dict = field(default_factory=dict)
+    
+    # Kafka configuration
+    kafka_enabled: bool = False
+    kafka_bootstrap_servers: str = "localhost:9092"
+    kafka_topic: str = "training-events"
+    kafka_message_key: str = "{pipeline_name}"  # Template for message key
+    kafka_message_template: dict = field(default_factory=dict)  # Custom message structure
+
 
 
 @dataclass

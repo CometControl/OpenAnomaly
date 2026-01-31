@@ -93,6 +93,69 @@ def run_training_task(pipeline_name: str):
         if not pipeline:
             logger.error(f"Pipeline '{pipeline_name}' not found.")
             return
+        
+        # Initialize Kafka producer if enabled
+        kafka_producer = None
+        if pipeline.training and pipeline.training.kafka_enabled:
+            from openanomaly.common.adapters.kafka_producer import KafkaProducerAdapter
+            try:
+                kafka_producer = KafkaProducerAdapter(
+                    bootstrap_servers=pipeline.training.kafka_bootstrap_servers
+                )
+                logger.info(f"Kafka producer initialized for topic '{pipeline.training.kafka_topic}'")
+            except Exception as e:
+                logger.warning(f"Failed to initialize Kafka producer: {e}. Continuing without Kafka.")
+                kafka_producer = None
+        
+        # Helper to build message from template
+        def build_kafka_message(event_type: str, **context):
+            """Build message from template with context variables."""
+            if not pipeline.training.kafka_message_template:
+                # Default message structure if no template defined
+                from datetime import datetime
+                return {
+                    "event_type": event_type,
+                    "timestamp": datetime.utcnow().isoformat() + "Z",
+                    "pipeline_name": pipeline_name,
+                    **context
+                }
+            
+            # Use custom template and substitute variables
+            message = {}
+            for key, value_template in pipeline.training.kafka_message_template.items():
+                if isinstance(value_template, str):
+                    # Simple string template substitution
+                    message[key] = value_template.format(
+                        event_type=event_type,
+                        pipeline_name=pipeline_name,
+                        **context
+                    )
+                else:
+                    # Use value as-is for non-string types
+                    message[key] = value_template
+            
+            # Add any context variables not in template
+            for key, value in context.items():
+                if key not in message:
+                    message[key] = value
+            
+            return message
+        
+        # Build message key from template
+        message_key = pipeline.training.kafka_message_key.format(pipeline_name=pipeline_name) if pipeline.training else None
+        
+        # Publish training started event
+        if kafka_producer:
+            message = build_kafka_message(
+                event_type="training_started",
+                model_id=pipeline.model.id,
+                training_window=pipeline.training.window if pipeline.training else None,
+            )
+            kafka_producer.publish_message(
+                topic=pipeline.training.kafka_topic,
+                message=message,
+                key=message_key
+            )
             
         if pipeline.model.type == "remote":
             from openanomaly.common.adapters.models.remote import RemoteModelAdapter
@@ -114,10 +177,59 @@ def run_training_task(pipeline_name: str):
         tsdb = PrometheusAdapter(read_url=PROMETHEUS_URL, write_url=PROMETHEUS_WRITE_URL)
         
         service = TrainingLoop(tsdb, model)
-        new_id = await service.run_training(pipeline)
         
-        if new_id:
-            logger.info(f"Pipeline '{pipeline_name}' trained. New Model ID: {new_id}")
+        # Track training metrics
+        import time
+        start_time = time.time()
+        
+        try:
+            new_id = await service.run_training(pipeline)
+            
+            duration = time.time() - start_time
+            
+            if new_id:
+                logger.info(f"Pipeline '{pipeline_name}' trained. New Model ID: {new_id}")
+                
+                # Publish training completed event
+                if kafka_producer:
+                    message = build_kafka_message(
+                        event_type="training_completed",
+                        model_id=new_id,
+                        training_window=pipeline.training.window if pipeline.training else None,
+                        status="success",
+                        duration_seconds=round(duration, 2),
+                    )
+                    kafka_producer.publish_message(
+                        topic=pipeline.training.kafka_topic,
+                        message=message,
+                        key=message_key
+                    )
+                    kafka_producer.flush()
+                    
+        except Exception as e:
+            duration = time.time() - start_time
+            
+            # Publish training failed event
+            if kafka_producer:
+                message = build_kafka_message(
+                    event_type="training_failed",
+                    model_id=pipeline.model.id,
+                    training_window=pipeline.training.window if pipeline.training else None,
+                    status="failed",
+                    duration_seconds=round(duration, 2),
+                    error=str(e)
+                )
+                kafka_producer.publish_message(
+                    topic=pipeline.training.kafka_topic,
+                    message=message,
+                    key=message_key
+                )
+                kafka_producer.flush()
+            raise
+        finally:
+            # Clean up Kafka producer
+            if kafka_producer:
+                kafka_producer.close()
             
     try:
         asyncio.run(_execute())
@@ -125,6 +237,8 @@ def run_training_task(pipeline_name: str):
     except Exception as e:
         logger.error(f"Training failed: {e}")
         raise e
+
+
 
 @shared_task(name="openanomaly.tasks.simulate_work")
 def simulate_work(task_id: int):

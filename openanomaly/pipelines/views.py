@@ -1,15 +1,18 @@
 
 import json
 import logging
-from rest_framework.views import APIView
+from rest_framework import viewsets, status
+from rest_framework.decorators import action
 from rest_framework.response import Response
-from rest_framework import status
+from rest_framework.views import APIView
 from drf_spectacular.utils import extend_schema, OpenApiParameter
 from drf_spectacular.types import OpenApiTypes
 from django.conf import settings
 from asgiref.sync import async_to_sync
 
-from openanomaly.common.dataclasses import Pipeline
+from openanomaly.pipelines.models import Pipeline
+from openanomaly.pipelines.serializers import PipelineSerializer
+from openanomaly.common.dataclasses import Pipeline as PipelineDataclass
 from openanomaly.pipelines.tasks import run_forecast_task, run_anomaly_task, run_training_task
 from openanomaly.pipelines.inference import InferenceLoop
 from openanomaly.pipelines.training import TrainingLoop
@@ -21,61 +24,60 @@ PROMETHEUS_URL = settings.PROMETHEUS_URL
 PROMETHEUS_WRITE_URL = settings.PROMETHEUS_WRITE_URL or f"{PROMETHEUS_URL}/api/v1/write"
 
 
-class HealthCheckView(APIView):
+class PipelineViewSet(viewsets.ModelViewSet):
     """
-    Health check endpoint
+    ViewSet for Pipeline CRUD operations.
+    
+    Provides:
+    - GET /pipelines/ - List all pipelines
+    - POST /pipelines/ - Create new pipeline
+    - GET /pipelines/{id}/ - Get pipeline details
+    - PUT /pipelines/{id}/ - Update pipeline (full)
+    - PATCH /pipelines/{id}/ - Update pipeline (partial)
+    - DELETE /pipelines/{id}/ - Delete pipeline
+    
+    Custom actions:
+    - POST /pipelines/{id}/trigger_forecast/ - Trigger forecast task
+    - POST /pipelines/{id}/trigger_anomaly/ - Trigger anomaly detection task
+    - POST /pipelines/{id}/trigger_training/ - Trigger training task
     """
+    queryset = Pipeline.objects.all()
+    serializer_class = PipelineSerializer
+    
     @extend_schema(
-        summary="Health check",
-        description="Returns the API health status and version",
-        responses={200: {"type": "object", "properties": {"status": {"type": "string"}, "version": {"type": "string"}}}}
-    )
-    def post(self, request):
-        return Response({"status": "ok", "version": "0.1.0"})
-
-
-class TriggerForecastView(APIView):
-    """
-    Trigger forecast run for a pipeline
-    """
-    @extend_schema(
-        summary="Trigger forecast",
-        description="Manually trigger a forecast run for a specific pipeline",
-        parameters=[OpenApiParameter(name='pipeline_name', type=OpenApiTypes.STR, location=OpenApiParameter.PATH)],
+        summary="Trigger forecast for this pipeline",
+        description="Manually trigger a forecast run for this specific pipeline",
         responses={200: {"type": "object", "properties": {"message": {"type": "string"}, "task_id": {"type": "string"}}}}
     )
-    def post(self, request, pipeline_name: str):
-        task = run_forecast_task.delay(pipeline_name)
+    @action(detail=True, methods=['post'])
+    def trigger_forecast(self, request, pk=None):
+        """Trigger forecast task for this pipeline"""
+        pipeline = self.get_object()
+        task = run_forecast_task.delay(pipeline.name)
         return Response({"message": "Forecast run triggered", "task_id": str(task.id)})
-
-
-class TriggerAnomalyCheckView(APIView):
-    """
-    Trigger anomaly check for a pipeline
-    """
+    
     @extend_schema(
-        summary="Trigger anomaly check",
-        description="Manually trigger an anomaly detection check for a specific pipeline",
-        parameters=[OpenApiParameter(name='pipeline_name', type=OpenApiTypes.STR, location=OpenApiParameter.PATH)],
+        summary="Trigger anomaly detection for this pipeline",
+        description="Manually trigger anomaly detection for this specific pipeline",
         responses={200: {"type": "object", "properties": {"message": {"type": "string"}, "task_id": {"type": "string"}}}}
     )
-    def post(self, request, pipeline_name: str):
-        task = run_anomaly_task.delay(pipeline_name)
+    @action(detail=True, methods=['post'])
+    def trigger_anomaly(self, request, pk=None):
+        """Trigger anomaly detection task for this pipeline"""
+        pipeline = self.get_object()
+        task = run_anomaly_task.delay(pipeline.name)
         return Response({"message": "Anomaly check triggered", "task_id": str(task.id)})
-
-
-class TriggerTrainingView(APIView):
-    """
-    Trigger training run for a pipeline
-    """
+    
     @extend_schema(
-        summary="Trigger training",
-        description="Manually trigger a model training run for a specific pipeline",
-        parameters=[OpenApiParameter(name='pipeline_name', type=OpenApiTypes.STR, location=OpenApiParameter.PATH)],
+        summary="Trigger training for this pipeline",
+        description="Manually trigger model training for this specific pipeline",
         responses={200: {"type": "object", "properties": {"message": {"type": "string"}, "task_id": {"type": "string"}}}}
     )
-    def post(self, request, pipeline_name: str):
-        task = run_training_task.delay(pipeline_name)
+    @action(detail=True, methods=['post'])
+    def trigger_training(self, request, pk=None):
+        """Trigger training task for this pipeline"""
+        pipeline = self.get_object()
+        task = run_training_task.delay(pipeline.name)
         return Response({"message": "Training run triggered", "task_id": str(task.id)})
 
 
@@ -97,7 +99,7 @@ class ExecuteInferenceView(APIView):
         try:
             data = request.data
             from pydantic import TypeAdapter
-            pipeline_adapter = TypeAdapter(Pipeline)
+            pipeline_adapter = TypeAdapter(PipelineDataclass)
             pipeline = pipeline_adapter.validate_python(data)
         except Exception as e:
             return Response({"error": f"Invalid payload: {str(e)}"}, status=status.HTTP_400_BAD_REQUEST)
@@ -122,7 +124,7 @@ class ExecuteInferenceView(APIView):
                 model = ChronosAdapter(model_id=pipeline.model.id)
             
             prom_url = pipeline.prometheus_url or PROMETHEUS_URL
-            prom_write_url = pipeline.prometheus_write_url or  PROMETHEUS_WRITE_URL
+            prom_write_url = pipeline.prometheus_write_url or PROMETHEUS_WRITE_URL
             
             tsdb = PrometheusAdapter(read_url=prom_url, write_url=prom_write_url)
             
@@ -156,7 +158,7 @@ class ExecuteTrainingView(APIView):
         try:
             data = request.data
             from pydantic import TypeAdapter
-            pipeline_adapter = TypeAdapter(Pipeline)
+            pipeline_adapter = TypeAdapter(PipelineDataclass)
             pipeline = pipeline_adapter.validate_python(data)
         except Exception as e:
             return Response({"error": f"Invalid payload: {str(e)}"}, status=status.HTTP_400_BAD_REQUEST)
@@ -192,12 +194,3 @@ class ExecuteTrainingView(APIView):
         except Exception as e:
             logger.exception("Training failed")
             return Response({"status": "error", "message": str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
-
-
-# Export view instances for URL routing
-health_check = HealthCheckView.as_view()
-trigger_forecast = TriggerForecastView.as_view()
-trigger_anomaly_check = TriggerAnomalyCheckView.as_view()
-trigger_training = TriggerTrainingView.as_view()
-execute_inference_view = ExecuteInferenceView.as_view()
-execute_training_view = ExecuteTrainingView.as_view()

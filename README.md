@@ -1,4 +1,5 @@
 # OpenAnomaly
+
 > **Zero-shot anomaly detection for Prometheus-compatible TSDBs using Time Series Foundation Models.**
 
 ![Python 3.11+](https://img.shields.io/badge/python-3.11+-blue.svg)
@@ -13,105 +14,127 @@ OpenAnomaly brings **real-time anomaly detection** to any **Prometheus-compatibl
 
 ---
 
-## How It Works
-
-```
-Scheduler (Celery Beat)
-    │
-    ▼
-Fetch Data (Prometheus Query API)
-    │
-    ▼
-Run TSFM (Local or Remote)
-    │
-    ▼
-Calculate Anomaly Score (Optional)
-    │
-    ▼
-Write Results (Remote Write)
-```
-
----
-
 ## Features
 
-*   **Leading TSFMs**: Use the latest Time Series Foundation Models from HuggingFace (Chronos, TimesFM, TOTO, Moirai).
-*   **Local or Remote Models**: Run models locally or call external inference endpoints.
-*   **Flexible Modes**: Forecast-only, Anomaly Detection, or both.
-*   **Rich Configuration**: Step size, covariates, confidence techniques, per-pipeline settings.
-*   **JSON Schema**: API and config validated with JSON Schema for easy integration.
-
----
-
-## Quick Start
-
-### 1. Install
-```bash
-uv sync
-```
-
-### 2. Configure (`config.yaml`)
-```yaml
-# Infrastructure
-prometheus_url: "http://localhost:8428"
-# ...
-```
-
-### 3. Bootstrap (Light Mode / SQLite)
-To run without MongoDB/Redis, use SQLite and seed the database from your YAML:
-```bash
-# Set DB to SQLite
-export OPENANOMALY_DATABASE_TYPE="sqlite"
-export CELERY_BROKER_URL="sqla+sqlite:///celery.db"
-
-# Create DB Schema
-python manage.py migrate
-
-# Seed pipelines from YAML
-python manage.py seed_pipelines
-```
-
-### 3. Run
-```bash
-# Set broker (SQLite for standalone)
-export CELERY_BROKER_URL="sqla+sqlite:///celery.db"
-
-# Run worker with beat (using the new Django app)
-celery -A openanomaly.config worker -B -l info
-```
+*   **Leading TSFMs**: Use the latest Time Series Foundation Models (Chronos, TimesFM, TOTO, Moirai).
+*   **High Availability Scheduler**: Distributed scheduling using **Celery Beat** and **RedBeat** (Redis-backed), enabling active-passive redundancy.
+*   **scalable Workers**: Horizontal scaling of Celery workers to handle thousands of pipelines.
+*   **Prometheus Native**: Reads from Query API, writes to Remote Write API.
+*   **Robust Configuration**: Validated YAML configuration using **Pydantic**.
+*   **Database Agnostic**: Supports **MongoDB** (Production) and **SQLite** (Dev/Light).
 
 ---
 
 ## Architecture
 
-| Port | Responsibility | Adapters |
-| :--- | :--- | :--- |
-| **TSDBClient** | Read/Write to TSDB | `PrometheusAdapter` |
-| **ModelEngine** | Run inference | Local adapters, `RemoteAdapter` |
-| **ConfigStore** | Load pipelines | `YamlAdapter`, `MongoAdapter` |
-| **Scheduler** | Trigger jobs | `CeleryBeatAdapter` |
+OpenAnomaly follows a **Hexagonal Architecture** (Ports & Adapters) to decouple core logic from infrastructure.
+
+```mermaid
+graph TD
+    subgraph "Infrastructure"
+        Prometheus[(Prometheus/VM)]
+        Redis[(Redis)]
+        Mongo[(MongoDB)]
+    end
+
+    subgraph "OpenAnomaly Cluster"
+        Scheduler[Celery Beat (RedBeat)]
+        Worker[Celery Worker]
+        API[Django API]
+    end
+
+    Scheduler --"Triggers Tasks"--> Redis
+    Worker --"Consumes Tasks"--> Redis
+    Worker --"Query/Write"--> Prometheus
+    Worker --"Load Config"--> Mongo
+    API --"Manage Pipelines"--> Mongo
+```
+
+---
+
+## Quick Start
+
+### 1. Prerequisites
+*   Docker & Docker Compose
+*   (Optional) `uv` for local development
+
+### 2. Configuration (`config.yaml`)
+OpenAnomaly uses a single YAML file for configuration, validated by Pydantic.
+
+```yaml
+django:
+  debug: true
+  secret_key: "your-secret-key"
+  allowed_hosts: ["*"]
+
+mongo:
+  url: "mongodb://mongo:27017"
+  db_name: "openanomaly"
+
+redis:
+  url: "redis://redis:6379/0"
+
+prometheus:
+  url: "http://prometheus:9090"
+  write_url: "http://prometheus:9090/api/v1/write"
+```
+
+### 3. Run with Docker Compose
+The easiest way to run the full stack (API, Worker, Beat, Redis, Mongo).
+
+```bash
+# Start all services
+docker compose up -d
+
+# Scale workers for higher throughput
+docker compose up -d --scale worker=3
+
+# Scale scheduler for High Availability (Active-Passive)
+docker compose up -d --scale beat=2
+```
+
+### 4. Access
+*   **Admin Panel**: [http://localhost:8000/admin/](http://localhost:8000/admin/) (Default: `admin` / `admin`)
+*   **API Docs**: [http://localhost:8000/api/docs](http://localhost:8000/api/docs)
 
 ---
 
 ## Development
 
+### 1. Install Dependencies
+We use `uv` for fast dependency management.
+
 ```bash
-# Option A: uv
+# Install dependencies
 uv sync
 
-# Option B: nix
-nix develop
+# Activate virtualenv
+source .venv/bin/activate
 ```
+
+### 2. Run Tests
+```bash
+# Run unit tests
+pytest tests/unit
+
+# Run integration tests (requires Docker services)
+pytest tests/integration
+```
+
+### 3. HA Verification
+To verify the High Availability Scheduler:
+1.  Start 2 beat instances: `docker compose up -d --scale beat=2`
+2.  Check logs: `docker compose logs -f beat`
+    *   One instance will acquire the lock (`Acquired lock`).
+    *   The other will wait (`Waiting for lock`).
 
 ---
 
 ## Deployment
 
-*   **Standalone**: Single process with SQLite Beat.
-*   **Distributed**: Redis broker + multiple workers.
-*   **Kubernetes**: Helm chart with Beat/Worker/API pods.
-
----
+*   **Scheduler**: Use `celery beat -S redbeat.RedBeatScheduler`. capable of running multiple instances for failover.
+*   **Database**: MongoDB is recommended for production pipeline storage.
+*   **Broker**: Redis is required for Celery and RedBeat.
 
 ## License
-[Apache 2.0](LICENSE)
+[MIT](LICENSE)

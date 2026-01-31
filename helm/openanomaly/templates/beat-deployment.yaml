@@ -24,7 +24,7 @@ spec:
       {{- end }}
       containers:
       - name: beat
-        image: "{{ .Values.image.registry }}/{{ .Values.image.repository }}:{{ include "openanomaly.imageTag" . }}-{{ .Values.buildMode.beat }}"
+        image: "{{- if .Values.image.registry }}{{ .Values.image.registry }}/{{- end }}{{ .Values.image.repository }}:{{ include "openanomaly.imageTag" . }}-{{ .Values.buildMode.beat }}"
         imagePullPolicy: {{ .Values.image.pullPolicy }}
         command: {{- toYaml .Values.beat.command | nindent 10 }}
         env:

@@ -24,7 +24,7 @@ spec:
       {{- end }}
       containers:
       - name: api
-        image: "{{ .Values.image.registry }}/{{ .Values.image.repository }}:{{ include "openanomaly.imageTag" . }}-{{ .Values.buildMode.api }}"
+        image: "{{- if .Values.image.registry }}{{ .Values.image.registry }}/{{- end }}{{ .Values.image.repository }}:{{ include "openanomaly.imageTag" . }}-{{ .Values.buildMode.api }}"
         imagePullPolicy: {{ .Values.image.pullPolicy }}
         command: {{- toYaml .Values.api.command | nindent 10 }}
         ports:

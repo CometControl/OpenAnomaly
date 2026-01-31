@@ -1,0 +1,56 @@
+image:
+  registry: ""  # Empty for local images
+  repository: openanomaly
+  tag: 0.1.0
+  pullPolicy: Never  # Don't pull from registry
+
+buildMode:
+  api: light
+  worker: heavy
+  beat: light
+
+# Small resources for local testing
+api:
+  replicaCount: 1
+  service:
+    type: LoadBalancer
+  resources:
+    requests:
+      memory: 512Mi
+      cpu: 100m
+    limits:
+      memory: 1Gi
+      cpu: 250m
+
+worker:
+  replicaCount: 1
+  autoscaling:
+    enabled: false  # Disable HPA for local testing
+  resources:
+    requests:
+      memory: 1Gi
+      cpu: 500m
+    limits:
+      memory: 2Gi
+      cpu: 1
+
+beat:
+  replicaCount: 1
+  resources:
+    requests:
+      memory: 128Mi
+      cpu: 50m
+    limits:
+      memory: 256Mi
+      cpu: 100m
+
+config:
+  django:
+    debug: true  # Enable debug for local testing
+  mongo:
+    url: "mongodb://mongodb:27017"
+  redis:
+    url: "redis://redis:6379/0"
+
+secrets:
+  secretKey: "test-local-secret-key-not-for-production"

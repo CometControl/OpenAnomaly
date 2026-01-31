@@ -24,7 +24,7 @@ spec:
       {{- end }}
       containers:
       - name: worker
-        image: "{{ .Values.image.registry }}/{{ .Values.image.repository }}:{{ include "openanomaly.imageTag" . }}-{{ .Values.buildMode.worker }}"
+        image: "{{- if .Values.image.registry }}{{ .Values.image.registry }}/{{- end }}{{ .Values.image.repository }}:{{ include "openanomaly.imageTag" . }}-{{ .Values.buildMode.worker }}"
         imagePullPolicy: {{ .Values.image.pullPolicy }}
         command: {{- toYaml .Values.worker.command | nindent 10 }}
         env:

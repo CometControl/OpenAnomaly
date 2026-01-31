@@ -1,0 +1,170 @@
+# Default values for openanomaly
+# This is a YAML-formatted file.
+
+## Image Configuration
+image:
+  registry: docker.io
+  repository: your-org/openanomaly
+  pullPolicy: IfNotPresent
+  # Overrides the image tag whose default is the chart appVersion
+  tag: ""
+
+imagePullSecrets: []
+nameOverride: ""
+fullnameOverride: ""
+
+## Build Mode Selection
+# Set to "light" for API/Beat (no ML models)
+# Set to "heavy" for Workers (with ML models)
+buildMode:
+  api: light
+  worker: heavy
+  beat: light
+
+## API Component
+api:
+  enabled: true
+  replicaCount: 2
+  
+  command:
+    - uv
+    - run
+    - gunicorn
+    - openanomaly.config.wsgi:application
+    - --bind
+    - "0.0.0.0:8000"
+    - --workers
+    - "4"
+  
+  service:
+    type: LoadBalancer  # ClusterIP for internal only
+    port: 8000
+  
+  resources:
+    requests:
+      memory: 512Mi
+      cpu: 250m
+    limits:
+      memory: 1Gi
+      cpu: 500m
+  
+  livenessProbe:
+    httpGet:
+      path: /health
+      port: 8000
+    initialDelaySeconds: 30
+    periodSeconds: 10
+  
+  readinessProbe:
+    httpGet:
+      path: /ready
+      port: 8000
+    initialDelaySeconds: 10
+    periodSeconds: 5
+
+## Worker Component
+worker:
+  enabled: true
+  replicaCount: 3
+  
+  command:
+    - uv
+    - run
+    - celery
+    - -A
+    - openanomaly.config.celery
+    - worker
+    - --loglevel=info
+    - --concurrency=2
+  
+  resources:
+    requests:
+      memory: 2Gi
+      cpu: "1"
+    limits:
+      memory: 8Gi
+      cpu: "2"
+  
+  autoscaling:
+    enabled: true
+    minReplicas: 3
+    maxReplicas: 10
+    targetCPUUtilizationPercentage: 70
+
+## Beat (Scheduler) Component
+beat:
+  enabled: true
+  replicaCount: 2  # HA with RedBeat (active-passive)
+  
+  command:
+    - uv
+    - run
+    - celery
+    - -A
+    - openanomaly.config.celery
+    - beat
+    - -S
+    - redbeat.RedBeatScheduler
+    - --loglevel=info
+  
+  resources:
+    requests:
+      memory: 256Mi
+      cpu: 100m
+    limits:
+      memory: 512Mi
+      cpu: 200m
+
+## Application Configuration
+config:
+  # Django settings
+  django:
+    debug: false
+    allowedHosts:
+      - "*"
+  
+  # MongoDB connection
+  mongo:
+    url: mongodb://mongodb:27017
+    dbName: openanomaly
+  
+  # Redis connection
+  redis:
+    url: redis://redis:6379/0
+  
+  # Prometheus endpoints
+  prometheus:
+    url: http://prometheus:9090
+    writeUrl: http://prometheus:9090/api/v1/write
+
+## Secrets
+secrets:
+  # Django secret key (generate with: python -c "import secrets; print(secrets.token_urlsafe(50))")
+  secretKey: "CHANGE_ME_IN_PRODUCTION"
+
+## Dependencies (if deploying with this chart)
+## Set to false if using external services
+dependencies:
+  redis:
+    enabled: false
+  mongodb:
+    enabled: false
+
+## Pod Security Context
+podSecurityContext: {}
+  # fsGroup: 2000
+
+## Container Security Context
+securityContext: {}
+  # capabilities:
+  #   drop:
+  #   - ALL
+  # readOnlyRootFilesystem: true
+  # runAsNonRoot: true
+  # runAsUser: 1000
+
+nodeSelector: {}
+
+tolerations: []
+
+affinity: {}

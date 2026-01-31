@@ -1,0 +1,47 @@
+{{- if .Values.beat.enabled -}}
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ include "openanomaly.fullname" . }}-beat
+  labels:
+    {{- include "openanomaly.labels" . | nindent 4 }}
+    app.kubernetes.io/component: beat
+spec:
+  replicas: {{ .Values.beat.replicaCount }}
+  selector:
+    matchLabels:
+      {{- include "openanomaly.selectorLabels" . | nindent 6 }}
+      app.kubernetes.io/component: beat
+  template:
+    metadata:
+      labels:
+        {{- include "openanomaly.selectorLabels" . | nindent 8 }}
+        app.kubernetes.io/component: beat
+    spec:
+      {{- with .Values.imagePullSecrets }}
+      imagePullSecrets:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      containers:
+      - name: beat
+        image: "{{ .Values.image.registry }}/{{ .Values.image.repository }}:{{ include "openanomaly.imageTag" . }}-{{ .Values.buildMode.beat }}"
+        imagePullPolicy: {{ .Values.image.pullPolicy }}
+        command: {{- toYaml .Values.beat.command | nindent 10 }}
+        env:
+        - name: OPENANOMALY_CONFIG_FILE
+          value: /config/config.yaml
+        - name: SECRET_KEY
+          valueFrom:
+            secretKeyRef:
+              name: {{ include "openanomaly.fullname" . }}-secret
+              key: SECRET_KEY
+        volumeMounts:
+        - name: config
+          mountPath: /config
+        resources:
+          {{- toYaml .Values.beat.resources | nindent 10 }}
+      volumes:
+      - name: config
+        configMap:
+          name: {{ include "openanomaly.fullname" . }}-config
+{{- end }}

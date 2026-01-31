@@ -1,0 +1,23 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: {{ include "openanomaly.fullname" . }}-config
+  labels:
+    {{- include "openanomaly.labels" . | nindent 4 }}
+data:
+  config.yaml: |
+    django:
+      debug: {{ .Values.config.django.debug }}
+      secret_key: "${SECRET_KEY}"
+      allowed_hosts: {{- toYaml .Values.config.django.allowedHosts | nindent 8 }}
+    
+    mongo:
+      url: {{ .Values.config.mongo.url | quote }}
+      db_name: {{ .Values.config.mongo.dbName | quote }}
+    
+    redis:
+      url: {{ .Values.config.redis.url | quote }}
+    
+    prometheus:
+      url: {{ .Values.config.prometheus.url | quote }}
+      write_url: {{ .Values.config.prometheus.writeUrl | quote }}

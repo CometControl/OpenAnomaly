@@ -1,0 +1,55 @@
+{{- if .Values.api.enabled -}}
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ include "openanomaly.fullname" . }}-api
+  labels:
+    {{- include "openanomaly.labels" . | nindent 4 }}
+    app.kubernetes.io/component: api
+spec:
+  replicas: {{ .Values.api.replicaCount }}
+  selector:
+    matchLabels:
+      {{- include "openanomaly.selectorLabels" . | nindent 6 }}
+      app.kubernetes.io/component: api
+  template:
+    metadata:
+      labels:
+        {{- include "openanomaly.selectorLabels" . | nindent 8 }}
+        app.kubernetes.io/component: api
+    spec:
+      {{- with .Values.imagePullSecrets }}
+      imagePullSecrets:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      containers:
+      - name: api
+        image: "{{ .Values.image.registry }}/{{ .Values.image.repository }}:{{ include "openanomaly.imageTag" . }}-{{ .Values.buildMode.api }}"
+        imagePullPolicy: {{ .Values.image.pullPolicy }}
+        command: {{- toYaml .Values.api.command | nindent 10 }}
+        ports:
+        - name: http
+          containerPort: 8000
+          protocol: TCP
+        env:
+        - name: OPENANOMALY_CONFIG_FILE
+          value: /config/config.yaml
+        - name: SECRET_KEY
+          valueFrom:
+            secretKeyRef:
+              name: {{ include "openanomaly.fullname" . }}-secret
+              key: SECRET_KEY
+        volumeMounts:
+        - name: config
+          mountPath: /config
+        livenessProbe:
+          {{- toYaml .Values.api.livenessProbe | nindent 10 }}
+        readinessProbe:
+          {{- toYaml .Values.api.readinessProbe | nindent 10 }}
+        resources:
+          {{- toYaml .Values.api.resources | nindent 10 }}
+      volumes:
+      - name: config
+        configMap:
+          name: {{ include "openanomaly.fullname" . }}-config
+{{- end }}
